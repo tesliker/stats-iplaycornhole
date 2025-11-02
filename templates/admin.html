@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Fetch Control</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <style>
+        .admin-container {
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+        }
+        .admin-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+        .status-card {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .status-badge {
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+        .status-running { background: #4CAF50; color: white; }
+        .status-paused { background: #ff9800; color: white; }
+        .status-completed { background: #2196F3; color: white; }
+        .status-error { background: #f44336; color: white; }
+        .status-not_running { background: #9e9e9e; color: white; }
+        .progress-bar {
+            width: 100%;
+            height: 30px;
+            background: #f0f0f0;
+            border-radius: 15px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4CAF50, #8BC34A);
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+        .controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .btn-control {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .btn-start { background: #4CAF50; color: white; }
+        .btn-pause { background: #ff9800; color: white; }
+        .btn-resume { background: #2196F3; color: white; }
+        .btn-stop { background: #f44336; color: white; }
+        .btn-control:hover { transform: translateY(-2px); opacity: 0.9; }
+        .btn-control:disabled { opacity: 0.5; cursor: not-allowed; }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        .stat-item {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 6px;
+        }
+        .stat-label {
+            font-size: 0.85rem;
+            color: #666;
+            margin-bottom: 5px;
+        }
+        .stat-value {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #333;
+        }
+        .error-message {
+            background: #ffebee;
+            color: #c62828;
+            padding: 10px;
+            border-radius: 6px;
+            margin-top: 10px;
+            display: none;
+        }
+        .checkpoint-info {
+            font-size: 0.85rem;
+            color: #666;
+            margin-top: 10px;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="admin-container">
+        <div class="admin-header">
+            <h1>🔧 Admin - Fetch Control Panel</h1>
+            <p>Monitor and control data fetching operations</p>
+        </div>
+
+        <div id="fetchStatusContainer">
+            <!-- Status cards will be inserted here -->
+        </div>
+
+        <div class="status-card">
+            <h2>Quick Actions</h2>
+            <div class="controls">
+                <button class="btn-control btn-start" onclick="startAllFetches()">Start All Seasons</button>
+                <button class="btn-control btn-stop" onclick="stopAllFetches()">Stop All Fetches</button>
+                <button class="btn-control btn-resume" onclick="resumeAllFetches()">Resume All Paused</button>
+                <button onclick="refreshStatus()" class="btn-control" style="background: #666; color: white;">Refresh Status</button>
+                <button onclick="checkDbHealth()" class="btn-control" style="background: #28a745; color: white;">🔍 Check DB Health</button>
+            </div>
+            <div id="dbHealthInfo" style="margin-top: 15px; padding: 10px; background: #f8f9fa; border-radius: 6px; display: none;">
+                <!-- DB health info will appear here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api';
+
+        async function refreshStatus() {
+            try {
+                const response = await fetch(`${API_BASE}/fetch-status`);
+                const data = await response.json();
+                
+                const container = document.getElementById('fetchStatusContainer');
+                container.innerHTML = '';
+
+                const seasons = [11, 10, 9, 8, 7];
+                
+                for (const bucketId of seasons) {
+                    const status = data.fetch_status[bucketId] || await getBucketStatus(bucketId);
+                    container.appendChild(createStatusCard(bucketId, status));
+                }
+            } catch (error) {
+                console.error('Error refreshing status:', error);
+            }
+        }
+
+        async function getBucketStatus(bucketId) {
+            try {
+                const response = await fetch(`${API_BASE}/fetch-status/${bucketId}`);
+                return await response.json();
+            } catch (error) {
+                return { status: 'not_running', bucket_id: bucketId };
+            }
+        }
+
+        function createStatusCard(bucketId, status) {
+            const card = document.createElement('div');
+            card.className = 'status-card';
+            
+            const statusClass = `status-${status.status || 'not_running'}`;
+            const statusLabel = (status.status || 'not_running').toUpperCase();
+            
+            const total = status.total_players || 0;
+            const processed = status.processed_players || 0; // Only show processed from current fetch
+            const inDb = status.records_in_db || 0; // Always show actual DB count
+            const percent = total > 0 ? Math.round((processed / total) * 100) : (inDb > 0 && total === 0 ? 100 : 0);
+            
+            card.innerHTML = `
+                <div class="status-header">
+                    <h3>Season ${bucketId} ${getSeasonName(bucketId)}</h3>
+                    <span class="status-badge ${statusClass}">${statusLabel}</span>
+                </div>
+                
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: ${percent}%">
+                        ${percent}%
+                    </div>
+                </div>
+                
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-label">Total Players</div>
+                        <div class="stat-value">${total > 0 ? total.toLocaleString() : (inDb > 0 ? 'N/A' : '0')}</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Processed (This Fetch)</div>
+                        <div class="stat-value">${processed.toLocaleString()}</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">In Database</div>
+                        <div class="stat-value">${inDb.toLocaleString()}</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Remaining</div>
+                        <div class="stat-value">${(total - processed).toLocaleString()}</div>
+                    </div>
+                </div>
+                
+                ${status.started_at ? `<div class="stat-label">Started: ${new Date(status.started_at).toLocaleString()}</div>` : ''}
+                ${status.last_checkpoint ? `<div class="checkpoint-info">Checkpoint: Batch ${status.last_checkpoint.batch}/${status.last_checkpoint.total_batches}</div>` : ''}
+                ${status.error ? `<div class="error-message" style="display: block;">Error: ${status.error}</div>` : ''}
+                
+                <div class="controls" style="margin-top: 15px;">
+                    ${status.status === 'running' || status.status === 'paused' ? 
+                        `<button class="btn-control btn-${status.status === 'paused' ? 'resume' : 'pause'}" 
+                                onclick="${status.status === 'paused' ? 'resume' : 'pause'}Fetch(${bucketId})">
+                            ${status.status === 'paused' ? '▶ Resume' : '⏸ Pause'}
+                        </button>
+                        <button class="btn-control btn-stop" onclick="stopFetch(${bucketId})">⏹ Stop</button>` :
+                        `<button class="btn-control btn-start" onclick="startFetch(${bucketId})">▶ Start</button>`
+                    }
+                </div>
+            `;
+            
+            return card;
+        }
+
+        function getSeasonName(bucketId) {
+            const names = {
+                11: '(2025-2026)',
+                10: '(2024-2025)',
+                9: '(2023-2024)',
+                8: '(2022-2023)',
+                7: '(2021-2022)'
+            };
+            return names[bucketId] || '';
+        }
+
+        async function startFetch(bucketId) {
+            try {
+                const response = await fetch(`${API_BASE}/fetch-data/${bucketId}`, { method: 'POST' });
+                const data = await response.json();
+                alert(`Fetch started for Season ${bucketId}`);
+                setTimeout(refreshStatus, 1000);
+            } catch (error) {
+                alert(`Error starting fetch: ${error.message}`);
+            }
+        }
+
+        async function pauseFetch(bucketId) {
+            try {
+                const response = await fetch(`${API_BASE}/fetch-control/${bucketId}/pause`, { method: 'POST' });
+                const data = await response.json();
+                alert(`Fetch paused for Season ${bucketId}`);
+                setTimeout(refreshStatus, 500);
+            } catch (error) {
+                alert(`Error pausing fetch: ${error.message}`);
+            }
+        }
+
+        async function resumeFetch(bucketId) {
+            try {
+                const response = await fetch(`${API_BASE}/fetch-control/${bucketId}/resume`, { method: 'POST' });
+                const data = await response.json();
+                alert(`Fetch resumed for Season ${bucketId}`);
+                setTimeout(refreshStatus, 500);
+            } catch (error) {
+                alert(`Error resuming fetch: ${error.message}`);
+            }
+        }
+
+        async function stopFetch(bucketId) {
+            if (!confirm(`Are you sure you want to stop the fetch for Season ${bucketId}?`)) return;
+            
+            try {
+                const response = await fetch(`${API_BASE}/fetch-control/${bucketId}/stop`, { method: 'POST' });
+                const data = await response.json();
+                alert(`Fetch stopped for Season ${bucketId}`);
+                setTimeout(refreshStatus, 500);
+            } catch (error) {
+                alert(`Error stopping fetch: ${error.message}`);
+            }
+        }
+
+        async function startAllFetches() {
+            if (!confirm('Start fetches for all seasons (7, 8, 9, 10, 11)?')) return;
+            
+            for (const bucketId of [7, 8, 9, 10, 11]) {
+                try {
+                    await fetch(`${API_BASE}/fetch-data/${bucketId}`, { method: 'POST' });
+                } catch (error) {
+                    console.error(`Error starting Season ${bucketId}:`, error);
+                }
+            }
+            alert('All fetches started');
+            setTimeout(refreshStatus, 2000);
+        }
+
+        async function stopAllFetches() {
+            if (!confirm('Stop ALL running fetches?')) return;
+            
+            for (const bucketId of [7, 8, 9, 10, 11]) {
+                try {
+                    await fetch(`${API_BASE}/fetch-control/${bucketId}/stop`, { method: 'POST' });
+                } catch (error) {
+                    console.error(`Error stopping Season ${bucketId}:`, error);
+                }
+            }
+            alert('All fetches stopped');
+            setTimeout(refreshStatus, 500);
+        }
+
+        async function resumeAllFetches() {
+            for (const bucketId of [7, 8, 9, 10, 11]) {
+                try {
+                    await fetch(`${API_BASE}/fetch-control/${bucketId}/resume`, { method: 'POST' });
+                } catch (error) {
+                    console.error(`Error resuming Season ${bucketId}:`, error);
+                }
+            }
+            alert('Attempted to resume all paused fetches');
+            setTimeout(refreshStatus, 500);
+        }
+
+        async function checkDbHealth() {
+            try {
+                const response = await fetch(`${API_BASE}/db-health`);
+                const data = await response.json();
+                const healthDiv = document.getElementById('dbHealthInfo');
+                
+                if (data.status === 'healthy') {
+                    healthDiv.innerHTML = `
+                        <strong>✅ Database Health Check</strong><br>
+                        <small>Total Records: ${data.total_records.toLocaleString()}</small><br>
+                        <small>Bucket Counts: ${JSON.stringify(data.bucket_counts, null, 2)}</small><br>
+                        <small>Volume Mounted: ${data.volume_mounted ? 'Yes' : 'No'}</small><br>
+                        <small>DB Path: ${data.database_path}</small><br>
+                        <small>Last Check: ${new Date(data.timestamp).toLocaleString()}</small>
+                    `;
+                    healthDiv.style.display = 'block';
+                    healthDiv.style.background = '#d4edda';
+                    healthDiv.style.color = '#155724';
+                } else {
+                    healthDiv.innerHTML = `
+                        <strong>⚠️ Database Health Check</strong><br>
+                        <small>Status: ${data.status}</small><br>
+                        <small>Error: ${data.error || 'Unknown error'}</small>
+                    `;
+                    healthDiv.style.display = 'block';
+                    healthDiv.style.background = '#f8d7da';
+                    healthDiv.style.color = '#721c24';
+                }
+            } catch (error) {
+                console.error('Error checking DB health:', error);
+                const healthDiv = document.getElementById('dbHealthInfo');
+                healthDiv.innerHTML = `<strong>❌ Error:</strong> ${error.message}`;
+                healthDiv.style.display = 'block';
+                healthDiv.style.background = '#f8d7da';
+                healthDiv.style.color = '#721c24';
+            }
+        }
+
+        // Auto-refresh every 5 seconds
+        setInterval(refreshStatus, 5000);
+        
+        // Initial load
+        refreshStatus();
+    </script>
+</body>
+</html>
+

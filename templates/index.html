@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bag Stats - American Cornhole League Player Statistics</title>
+    <meta name="description" content="Comprehensive player statistics from the American Cornhole League (ACL). View rankings, PPR, DPR, CPI, win percentages, and season comparisons for ACL cornhole players.">
+    <meta name="keywords" content="cornhole, american cornhole league, ACL, bag stats, cornhole statistics, player rankings, cornhole players, PPR, DPR, CPI">
+    <meta property="og:title" content="Bag Stats - American Cornhole League Player Statistics">
+    <meta property="og:description" content="View comprehensive statistics for American Cornhole League players including rankings, performance metrics, and season comparisons.">
+    <meta property="og:type" content="website">
+    <link rel="canonical" href="https://stats.iplaycornhole.me">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-main">
+                <div class="header-title-section">
+                    <h1>Bag Stats</h1>
+                </div>
+                <p class="header-subtitle">American Cornhole League Player Statistics</p>
+            </div>
+            <div class="header-controls">
+                <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                    <label for="bucketSelect" style="font-weight: 600;">Season(s):</label>
+                    <select id="bucketSelect" class="select" style="min-width: 200px;">
+                        <option value="">Loading seasons...</option>
+                    </select>
+                    <div id="multiSeasonContainer" style="display: none;">
+                        <label style="font-size: 0.95rem; color: white; font-weight: 500; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+                            <input type="checkbox" id="multiSeasonToggle" style="cursor: pointer;"> Select Multiple Seasons
+                        </label>
+                        <div id="seasonCheckboxes" style="display: none; margin-top: 10px; max-height: 200px; overflow-y: auto; border: 1px solid rgba(255,255,255,0.3); padding: 10px; border-radius: 4px; background: rgba(255,255,255,0.95);">
+                            <!-- Season checkboxes will be populated here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+            <div class="filters">
+            <div class="filter-group">
+                <label for="searchInput">Search:</label>
+                <input type="text" id="searchInput" placeholder="Player name...">
+            </div>
+            <div class="filter-group">
+                <label for="stateFilter">State:</label>
+                <select id="stateFilter" class="select">
+                    <option value="">All States</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="skillFilter">Skill Level:</label>
+                <select id="skillFilter" class="select">
+                    <option value="">All Levels</option>
+                </select>
+            </div>
+            <button id="applyFilters" class="btn btn-secondary">Apply Filters</button>
+        </div>
+
+        <div class="stats-container">
+            <div id="loading" class="loading" style="display: none;">Loading...</div>
+            <div id="error" class="error" style="display: none;"></div>
+            
+            <div class="table-container">
+                <table id="playersTable">
+                    <thead>
+                        <tr>
+                            <th class="sortable" data-sort="rank">Rank <span class="sort-indicator"></span></th>
+                            <th>Name</th>
+                            <th>State</th>
+                            <th>Skill</th>
+                            <th class="sortable" data-sort="pts_per_rnd">PPR <span class="sort-indicator"></span></th>
+                            <th class="sortable" data-sort="dpr">DPR <span class="sort-indicator"></span></th>
+                            <th class="sortable" data-sort="player_cpi">CPI <span class="sort-indicator"></span></th>
+                            <th class="sortable" data-sort="win_pct">Win % <span class="sort-indicator"></span></th>
+                            <th class="sortable" data-sort="total_games">Games <span class="sort-indicator"></span></th>
+                            <th class="sortable" data-sort="rounds_total">Rounds <span class="sort-indicator"></span></th>
+                            <th class="sortable" data-sort="overall_total">Overall <span class="sort-indicator"></span></th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="playersBody">
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="pagination">
+                <button id="prevPage" class="btn btn-secondary">Previous</button>
+                <span id="pageInfo">Page 1 of 1</span>
+                <button id="nextPage" class="btn btn-secondary">Next</button>
+            </div>
+        </div>
+
+        <!-- Chart Modal -->
+        <div id="chartModal" class="modal">
+            <div class="modal-content">
+                <span class="close">&times;</span>
+                <h2 id="chartTitle">Player Comparison</h2>
+                
+                <!-- Tab Buttons -->
+                <div class="chart-tabs">
+                    <button class="tab-button active" data-stat="pts_per_rnd">PPR</button>
+                    <button class="tab-button" data-stat="dpr">DPR</button>
+                    <button class="tab-button" data-stat="player_cpi">CPI</button>
+                    <button class="tab-button" data-stat="win_pct">Win %</button>
+                    <button class="tab-button" data-stat="rank">Rank</button>
+                </div>
+                
+                <!-- Chart Container (single chart that switches) -->
+                <div id="chartContainer">
+                    <canvas id="comparisonChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+    
+    <footer class="footer">
+        <div class="footer-content">
+            <p class="footer-disclaimer">
+                <strong>Disclaimer:</strong> This site is not affiliated with, endorsed by, or sponsored by the American Cornhole League (ACL). 
+                Player statistics are derived from publicly available ACL data sources. This site presents aggregated and transformed data 
+                for informational purposes only. All ACL data and content remain the property of the American Cornhole League.
+            </p>
+            <p class="footer-note">
+                For official ACL statistics and information, please visit 
+                <a href="https://www.iplayacl.com" target="_blank" rel="noopener noreferrer">iPlayACL.com</a>.
+            </p>
+        </div>
+    </footer>
+</body>
+</html>
+
