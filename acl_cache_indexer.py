@@ -312,6 +312,7 @@ async def index_event_player_stats(event_id: int, use_cache: bool = True, db: As
     # Fetch from API
     async with httpx.AsyncClient(timeout=30.0) as client:
         try:
+            print(f"Fetching from ACL API: {url}")
             response = await client.get(url)
             if response.status_code == 404:
                 return None
@@ -360,6 +361,7 @@ async def index_event_standings(event_id: int, use_cache: bool = True, db: Async
     # Fetch from API
     async with httpx.AsyncClient(timeout=30.0) as client:
         try:
+            print(f"Fetching from ACL API: {url}")
             response = await client.get(url)
             if response.status_code == 404:
                 return None
@@ -406,6 +408,7 @@ async def index_bracket_data(event_id: int, use_cache: bool = True, db: AsyncSes
     # Fetch from API
     async with httpx.AsyncClient(timeout=30.0) as client:
         try:
+            print(f"Fetching from ACL API: {url}")
             response = await client.get(url)
             if response.status_code == 404:
                 return None
