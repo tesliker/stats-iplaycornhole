@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game Details - Bag Stats</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <style>
+        .game-detail-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+        }
+        .game-detail-header h1 {
+            margin: 0 0 10px 0;
+            font-size: 2rem;
+        }
+        .game-detail-content {
+            padding: 30px;
+        }
+        .game-matchup {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            gap: 30px;
+            align-items: center;
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 30px;
+        }
+        .player-section {
+            text-align: center;
+        }
+        .player-name {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+        .player-name.winner {
+            color: #28a745;
+        }
+        .player-name.loser {
+            color: #dc3545;
+        }
+        .player-score {
+            font-size: 3rem;
+            font-weight: 700;
+            color: #333;
+            margin: 20px 0;
+        }
+        .vs-divider {
+            font-size: 2rem;
+            font-weight: 600;
+            color: #666;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .stat-card {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+        }
+        .stat-label {
+            font-size: 0.85rem;
+            color: #666;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+        .stat-value {
+            font-size: 1.2rem;
+            color: #333;
+            font-weight: 600;
+        }
+        .event-info {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .event-info h2 {
+            margin: 0 0 15px 0;
+            font-size: 1.3rem;
+        }
+        .event-info-item {
+            margin: 8px 0;
+            color: #666;
+        }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 20px;
+            color: white;
+            text-decoration: none;
+            padding: 8px 16px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 6px;
+            font-weight: 600;
+        }
+        .back-link:hover {
+            background: rgba(255,255,255,0.3);
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        .error {
+            text-align: center;
+            padding: 20px;
+            color: #dc3545;
+            background: #f8d7da;
+            border-radius: 6px;
+            margin: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="game-detail-header">
+            <a href="/games" class="back-link">← Back to Games</a>
+            <h1>Game Details</h1>
+        </div>
+
+        <div id="loading" class="loading">Loading game details...</div>
+        <div id="error" class="error" style="display: none;"></div>
+
+        <div class="game-detail-content" id="gameContent" style="display: none;">
+            <div id="eventInfo"></div>
+            <div id="gameMatchup"></div>
+            <div id="gameStats"></div>
+        </div>
+    </div>
+
+    <script>
+        const gameId = window.location.pathname.split('/').pop();
+        
+        async function loadGameDetails() {
+            const loading = document.getElementById('loading');
+            const error = document.getElementById('error');
+            const content = document.getElementById('gameContent');
+            
+            try {
+                const response = await fetch(`/api/games/${gameId}`);
+                if (!response.ok) {
+                    throw new Error('Game not found');
+                }
+                const game = await response.json();
+                
+                // Render event info
+                if (game.event) {
+                    document.getElementById('eventInfo').innerHTML = `
+                        <div class="event-info">
+                            <h2>Event Information</h2>
+                            <div class="event-info-item"><strong>Event:</strong> ${game.event.event_name || `Event ${game.event.event_id}`}</div>
+                            ${game.event.base_event_name ? `<div class="event-info-item"><strong>Base Event:</strong> ${game.event.base_event_name}</div>` : ''}
+                            ${game.event.bracket_name ? `<div class="event-info-item"><strong>Bracket:</strong> ${game.event.bracket_name}</div>` : ''}
+                            ${game.event.event_date ? `<div class="event-info-item"><strong>Date:</strong> ${new Date(game.event.event_date).toLocaleDateString()}</div>` : ''}
+                            ${game.event.location ? `<div class="event-info-item"><strong>Location:</strong> ${game.event.location}</div>` : ''}
+                            ${game.match ? `<div class="event-info-item"><strong>Match ID:</strong> ${game.match.match_id}</div>` : ''}
+                            ${game.match && game.match.round_number ? `<div class="event-info-item"><strong>Round:</strong> ${game.match.round_number}</div>` : ''}
+                        </div>
+                    `;
+                }
+                
+                // Render matchup
+                const isPlayer1Winner = game.winner_id === game.player1.id;
+                const isPlayer2Winner = game.winner_id === game.player2.id;
+                
+                document.getElementById('gameMatchup').innerHTML = `
+                    <div class="game-matchup">
+                        <div class="player-section">
+                            <div class="player-name ${isPlayer1Winner ? 'winner' : (isPlayer2Winner ? 'loser' : '')}">
+                                ${game.player1.name || `Player ${game.player1.id}`}
+                            </div>
+                            ${game.player1.cpi ? `<div style="color: #666; font-size: 0.9rem;">CPI: ${game.player1.cpi.toFixed(2)}</div>` : ''}
+                            <div class="player-score">${game.player1.score !== null && game.player1.score !== undefined ? game.player1.score : (game.player1.points || 0)}</div>
+                        </div>
+                        <div class="vs-divider">VS</div>
+                        <div class="player-section">
+                            <div class="player-name ${isPlayer2Winner ? 'winner' : (isPlayer1Winner ? 'loser' : '')}">
+                                ${game.player2.name || `Player ${game.player2.id}`}
+                            </div>
+                            ${game.player2.cpi ? `<div style="color: #666; font-size: 0.9rem;">CPI: ${game.player2.cpi.toFixed(2)}</div>` : ''}
+                            <div class="player-score">${game.player2.score !== null && game.player2.score !== undefined ? game.player2.score : (game.player2.points || 0)}</div>
+                        </div>
+                    </div>
+                `;
+                
+                // Render stats
+                document.getElementById('gameStats').innerHTML = `
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                        <div>
+                            <h2 style="margin-bottom: 15px;">${game.player1.name || `Player ${game.player1.id}`} Stats</h2>
+                            <div class="stats-grid">
+                                <div class="stat-card">
+                                    <div class="stat-label">Points Per Round (PPR)</div>
+                                    <div class="stat-value">${game.player1.ppr ? game.player1.ppr.toFixed(2) : 'N/A'}</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-label">Rounds</div>
+                                    <div class="stat-value">${game.player1.rounds || 0}</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-label">Bags In</div>
+                                    <div class="stat-value">${game.player1.bags_in || 0}</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-label">Bags On</div>
+                                    <div class="stat-value">${game.player1.bags_on || 0}</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-label">Bags Off</div>
+                                    <div class="stat-value">${game.player1.bags_off || 0}</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-label">Total Bags Thrown</div>
+                                    <div class="stat-value">${game.player1.total_bags_thrown || 0}</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-label">4-Baggers</div>
+                                    <div class="stat-value">${game.player1.four_baggers || 0}</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-label">4-Bagger %</div>
+                                    <div class="stat-value">${game.player1.four_bagger_pct ? (game.player1.four_bagger_pct * 100).toFixed(1) + '%' : 'N/A'}</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-label">Bags In %</div>
+                                    <div class="stat-value">${game.player1.bags_in_pct ? (game.player1.bags_in_pct * 100).toFixed(1) + '%' : 'N/A'}</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-label">Bags On %</div>
+                                    <div class="stat-value">${game.player1.bags_on_pct ? (game.player1.bags_on_pct * 100).toFixed(1) + '%' : 'N/A'}</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-label">Bags Off %</div>
+                                    <div class="stat-value">${game.player1.bags_off_pct ? (game.player1.bags_off_pct * 100).toFixed(1) + '%' : 'N/A'}</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-label">Opponent Points</div>
+                                    <div class="stat-value">${game.player1.opponent_points || 0}</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-label">Opponent PPR</div>
+                                    <div class="stat-value">${game.player1.opponent_ppr ? game.player1.opponent_ppr.toFixed(2) : 'N/A'}</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div>
+                            <h2 style="margin-bottom: 15px;">${game.player2.name || `Player ${game.player2.id}`} Stats</h2>
+                            <div class="stats-grid">
+                                <div class="stat-card">
+                                    <div class="stat-label">Points Per Round (PPR)</div>
+                                    <div class="stat-value">${game.player2.ppr ? game.player2.ppr.toFixed(2) : 'N/A'}</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-label">Rounds</div>
+                                    <div class="stat-value">${game.player2.rounds || 0}</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-label">Bags In</div>
+                                    <div class="stat-value">${game.player2.bags_in || 0}</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-label">Bags On</div>
+                                    <div class="stat-value">${game.player2.bags_on || 0}</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-label">Bags Off</div>
+                                    <div class="stat-value">${game.player2.bags_off || 0}</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-label">Total Bags Thrown</div>
+                                    <div class="stat-value">${game.player2.total_bags_thrown || 0}</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-label">4-Baggers</div>
+                                    <div class="stat-value">${game.player2.four_baggers || 0}</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-label">4-Bagger %</div>
+                                    <div class="stat-value">${game.player2.four_bagger_pct ? (game.player2.four_bagger_pct * 100).toFixed(1) + '%' : 'N/A'}</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-label">Bags In %</div>
+                                    <div class="stat-value">${game.player2.bags_in_pct ? (game.player2.bags_in_pct * 100).toFixed(1) + '%' : 'N/A'}</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-label">Bags On %</div>
+                                    <div class="stat-value">${game.player2.bags_on_pct ? (game.player2.bags_on_pct * 100).toFixed(1) + '%' : 'N/A'}</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-label">Bags Off %</div>
+                                    <div class="stat-value">${game.player2.bags_off_pct ? (game.player2.bags_off_pct * 100).toFixed(1) + '%' : 'N/A'}</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-label">Opponent Points</div>
+                                    <div class="stat-value">${game.player2.opponent_points || 0}</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-label">Opponent PPR</div>
+                                    <div class="stat-value">${game.player2.opponent_ppr ? game.player2.opponent_ppr.toFixed(2) : 'N/A'}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                loading.style.display = 'none';
+                content.style.display = 'block';
+            } catch (err) {
+                loading.style.display = 'none';
+                error.textContent = `Error loading game: ${err.message}`;
+                error.style.display = 'block';
+            }
+        }
+        
+        document.addEventListener('DOMContentLoaded', loadGameDetails);
+    </script>
+</body>
+</html>
+

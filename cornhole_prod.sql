@@ -1,0 +1,3 @@
+Connecting to fdaa:28:f8bd:a7b:508:95d:440:2...
+exec: "pg_dump": executable file not found in $PATH
+Error: ssh shell: ssh: command pg_dump $DATABASE_URL --no-owner --no-acl failed

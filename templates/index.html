@@ -24,6 +24,9 @@
             </div>
             <div class="header-controls">
                 <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                    <a href="/events" class="btn" style="background: rgba(255,255,255,0.2); color: white; text-decoration: none; padding: 8px 16px; border-radius: 6px; font-weight: 600; white-space: nowrap; transition: background 0.2s;">🎯 Events</a>
+                    <a href="/games" class="btn" style="background: rgba(255,255,255,0.2); color: white; text-decoration: none; padding: 8px 16px; border-radius: 6px; font-weight: 600; white-space: nowrap; transition: background 0.2s;">🎮 Games</a>
+                    <a href="/head-to-head" class="btn" style="background: rgba(255,255,255,0.2); color: white; text-decoration: none; padding: 8px 16px; border-radius: 6px; font-weight: 600; white-space: nowrap; transition: background 0.2s;">⚔️ Head-to-Head</a>
                     <label for="bucketSelect" style="font-weight: 600;">Season(s):</label>
                     <select id="bucketSelect" class="select" style="min-width: 200px;">
                         <option value="">Loading seasons...</option>
@@ -57,6 +60,15 @@
                     <option value="">All Levels</option>
                 </select>
             </div>
+            <!-- Region filter temporarily disabled until Season 11 re-index completes -->
+            <!-- <div class="filter-group">
+                <label for="regionFilter">Region:</label>
+                <select id="regionFilter" class="select">
+                    <option value="">All Regions</option>
+                    <option value="us">United States</option>
+                    <option value="canada">Canada</option>
+                </select>
+            </div> -->
             <button id="applyFilters" class="btn btn-secondary">Apply Filters</button>
         </div>
 
@@ -64,23 +76,16 @@
             <div id="loading" class="loading" style="display: none;">Loading...</div>
             <div id="error" class="error" style="display: none;"></div>
             
+            <!-- Available Stats Tags (hidden stats) -->
+            <div id="availableStatsTags" class="stats-tags-container" style="display: none;">
+                <span class="stats-tags-label">Available Stats:</span>
+                <div id="statsTagsList" class="stats-tags-list"></div>
+            </div>
+            
             <div class="table-container">
                 <table id="playersTable">
-                    <thead>
-                        <tr>
-                            <th class="sortable" data-sort="rank">Rank <span class="sort-indicator"></span></th>
-                            <th>Name</th>
-                            <th>State</th>
-                            <th>Skill</th>
-                            <th class="sortable" data-sort="pts_per_rnd">PPR <span class="sort-indicator"></span></th>
-                            <th class="sortable" data-sort="dpr">DPR <span class="sort-indicator"></span></th>
-                            <th class="sortable" data-sort="player_cpi">CPI <span class="sort-indicator"></span></th>
-                            <th class="sortable" data-sort="win_pct">Win % <span class="sort-indicator"></span></th>
-                            <th class="sortable" data-sort="total_games">Games <span class="sort-indicator"></span></th>
-                            <th class="sortable" data-sort="rounds_total">Rounds <span class="sort-indicator"></span></th>
-                            <th class="sortable" data-sort="overall_total">Overall <span class="sort-indicator"></span></th>
-                            <th>Actions</th>
-                        </tr>
+                    <thead id="tableHead">
+                        <!-- Headers will be dynamically generated -->
                     </thead>
                     <tbody id="playersBody">
                     </tbody>

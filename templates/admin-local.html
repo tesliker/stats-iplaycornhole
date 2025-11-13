@@ -1,0 +1,1015 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Local - Testing Mode</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <style>
+        .admin-container {
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+        }
+        .admin-header {
+            background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+        .local-badge {
+            background: #ff5722;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: inline-block;
+            margin-left: 10px;
+        }
+        .status-card {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .status-badge {
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+        .status-running { background: #4CAF50; color: white; }
+        .status-paused { background: #ff9800; color: white; }
+        .status-completed { background: #2196F3; color: white; }
+        .status-error { background: #f44336; color: white; }
+        .status-not_running { background: #9e9e9e; color: white; }
+        .progress-bar {
+            width: 100%;
+            height: 30px;
+            background: #f0f0f0;
+            border-radius: 15px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4CAF50, #8BC34A);
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+        .controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .btn-control {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .btn-start { background: #4CAF50; color: white; }
+        .btn-pause { background: #ff9800; color: white; }
+        .btn-resume { background: #2196F3; color: white; }
+        .btn-stop { background: #f44336; color: white; }
+        .btn-control:hover { transform: translateY(-2px); opacity: 0.9; }
+        .btn-control:disabled { opacity: 0.5; cursor: not-allowed; }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        .stat-item {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 6px;
+        }
+        .stat-label {
+            font-size: 0.85rem;
+            color: #666;
+            margin-bottom: 5px;
+        }
+        .stat-value {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #333;
+        }
+        .error-message {
+            background: #ffebee;
+            color: #c62828;
+            padding: 10px;
+            border-radius: 6px;
+            margin-top: 10px;
+            display: none;
+        }
+        .checkpoint-info {
+            font-size: 0.85rem;
+            color: #666;
+            margin-top: 10px;
+            font-style: italic;
+        }
+        .limit-info {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+        .limit-info strong {
+            color: #856404;
+        }
+    </style>
+</head>
+<body>
+    <div class="admin-container">
+        <div class="admin-header">
+            <h1>🧪 Admin Local - Testing Mode <span class="local-badge">LOCAL TESTING</span></h1>
+            <p>Limited data for local testing - Players: 100 max, Events: Open #2 Winter Haven (28 events)</p>
+        </div>
+
+        <div class="limit-info">
+            <strong>⚠️ Testing Mode Limits:</strong>
+            <ul style="margin: 10px 0; padding-left: 20px;">
+                <li><strong>Player Indexing:</strong> Limited to 100 players per season</li>
+                <li><strong>Event Indexing:</strong> Open #2 Winter Haven events (28 events)</li>
+                <li><strong>Game Indexing:</strong> Open #2 Winter Haven events (28 events)</li>
+            </ul>
+        </div>
+
+        <div id="fetchStatusContainer">
+            <!-- Status cards will be inserted here -->
+        </div>
+
+        <div class="status-card">
+            <h2>Quick Actions</h2>
+            <div class="controls">
+                <button class="btn-control btn-start" onclick="startAllFetches()">Start All Seasons</button>
+                <button class="btn-control btn-stop" onclick="stopAllFetches()">Stop All Fetches</button>
+                <button class="btn-control btn-resume" onclick="resumeAllFetches()">Resume All Paused</button>
+                <button onclick="refreshStatus()" class="btn-control" style="background: #666; color: white;">Refresh Status</button>
+                <button onclick="checkDbHealth()" class="btn-control" style="background: #28a745; color: white;">🔍 Check DB Health</button>
+            </div>
+            <div id="dbHealthInfo" style="margin-top: 15px; padding: 10px; background: #f8f9fa; border-radius: 6px; display: none;">
+                <!-- DB health info will appear here -->
+            </div>
+        </div>
+
+        <div class="status-card" id="eventIndexingCard">
+            <div class="status-header">
+                <h2>🎯 Event Indexing (Local - Open #2 Winter Haven)</h2>
+                <span class="status-badge status-not_running" id="eventIndexingStatus">NOT RUNNING</span>
+            </div>
+            <p style="color: #666; margin-bottom: 15px;">
+                Index event data for Open #2 Winter Haven events (28 events). Limited to 100 players for testing.
+            </p>
+            
+            <div id="eventIndexingProgress" style="display: none;">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="eventIndexingProgressBar" style="width: 0%">
+                        0%
+                    </div>
+                </div>
+                <div class="stats-grid" id="eventIndexingStats" style="margin-top: 15px;">
+                    <!-- Stats will be inserted here -->
+                </div>
+            </div>
+            
+            <div id="eventIndexingInfo" style="margin-bottom: 15px; padding: 10px; background: #f8f9fa; border-radius: 6px; display: none;">
+                <!-- Event indexing info will appear here -->
+            </div>
+            <div style="margin-bottom: 15px;">
+                <label style="display: flex; align-items: center; gap: 10px;">
+                    <input type="checkbox" id="skipProcessedCheckbox" checked style="width: 18px; height: 18px;">
+                    <span>Skip players who already have events indexed (faster, recommended)</span>
+                </label>
+            </div>
+            <div class="controls">
+                <button class="btn-control btn-start" onclick="startEventIndexing(11)">Index Season 11 Events (Local)</button>
+                <button onclick="checkEventIndexingStatus()" class="btn-control" style="background: #666; color: white;">Refresh Event Status</button>
+            </div>
+        </div>
+
+        <div class="status-card" id="gameIndexingCard">
+            <div class="status-header">
+                <h2>🎮 Game/Match Indexing</h2>
+                <span class="status-badge status-not_running" id="gameIndexingStatus">NOT RUNNING</span>
+            </div>
+            <p style="color: #666; margin-bottom: 15px;">
+                Index individual game/match data for events. Uses bracket data to discover all matches and games.
+                <br><strong>All Events:</strong> Processes all events in the database.
+                <br><strong>Season 11 (Local):</strong> Only processes Open #2 Winter Haven events (28 events) for testing.
+            </p>
+            
+            <div id="gameIndexingProgress" style="display: none;">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="gameIndexingProgressBar" style="width: 0%">
+                        0%
+                    </div>
+                </div>
+                <div class="stats-grid" id="gameIndexingStats" style="margin-top: 15px;">
+                    <!-- Stats will be inserted here -->
+                </div>
+            </div>
+            
+            <div id="gameIndexingInfo" style="margin-bottom: 15px; padding: 10px; background: #f8f9fa; border-radius: 6px; display: none;">
+                <!-- Game indexing info will appear here -->
+            </div>
+            <div id="gameIndexingLogs" style="display: none; margin-top: 15px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <h3 style="margin: 0; font-size: 1rem;">📋 Live Logs</h3>
+                    <button id="copyLogsButton" onclick="copyGameIndexingLogs()" style="background: #2196f3; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 0.85rem; font-weight: 600;">📋 Copy Logs</button>
+                </div>
+                <div id="gameIndexingLogsContent" style="background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 6px; max-height: 400px; overflow-y: auto; font-family: 'Courier New', monospace; font-size: 0.85rem; line-height: 1.5;">
+                    <!-- Logs will appear here -->
+                </div>
+            </div>
+            
+            <div class="controls">
+                <button class="btn-control btn-start" onclick="startGameIndexingForAllEvents()">Index Games for All Events</button>
+                <button class="btn-control btn-start" onclick="startGameIndexing(11)" style="background: #4a90e2;">Index Season 11 Games (Local - Open #2 Winter Haven)</button>
+                <button class="btn-control btn-start" onclick="startCacheIndexStats(11)" style="background: #9c27b0;">Cache Index Stats (Season 11)</button>
+                <button class="btn-control btn-start" onclick="startCacheIndexStats()" style="background: #673ab7;">Cache Index Stats (All Seasons)</button>
+                <button onclick="checkGameIndexingStatus()" class="btn-control" style="background: #666; color: white;">Refresh Game Status</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api/local';
+
+        async function refreshStatus() {
+            try {
+                const response = await fetch(`${API_BASE}/fetch-status`);
+                const data = await response.json();
+                
+                const container = document.getElementById('fetchStatusContainer');
+                container.innerHTML = '';
+
+                const seasons = [11, 10, 9, 8, 7];
+                
+                // Process all seasons in parallel
+                const statusPromises = seasons.map(async (bucketId) => {
+                    let status = data.fetch_status[bucketId];
+                    if (!status) {
+                        status = await getBucketStatus(bucketId);
+                    }
+                    return { bucketId, status };
+                });
+                
+                const statuses = await Promise.all(statusPromises);
+                
+                // Create cards in order
+                for (const { bucketId, status } of statuses) {
+                    container.appendChild(createStatusCard(bucketId, status));
+                }
+            } catch (error) {
+                console.error('Error refreshing status:', error);
+                const container = document.getElementById('fetchStatusContainer');
+                container.innerHTML = `<div class="status-card"><p style="color: red;">Error loading status: ${error.message}</p></div>`;
+            }
+        }
+
+        async function getBucketStatus(bucketId) {
+            try {
+                const response = await fetch(`${API_BASE}/fetch-status/${bucketId}`);
+                return await response.json();
+            } catch (error) {
+                return { status: 'not_running', bucket_id: bucketId };
+            }
+        }
+
+        function createStatusCard(bucketId, status) {
+            const card = document.createElement('div');
+            card.className = 'status-card';
+            
+            const statusClass = `status-${status.status || 'not_running'}`;
+            const statusLabel = (status.status || 'not_running').toUpperCase();
+            
+            const total = status.total_players || 0;
+            const processed = status.processed_players || 0;
+            const inDb = status.records_in_db || 0;
+            const percent = total > 0 ? Math.round((processed / total) * 100) : (inDb > 0 && total === 0 ? 100 : 0);
+            
+            card.innerHTML = `
+                <div class="status-header">
+                    <h3>Season ${bucketId} ${getSeasonName(bucketId)} <small style="color: #666;">(Local - Max 100 players)</small></h3>
+                    <span class="status-badge ${statusClass}">${statusLabel}</span>
+                </div>
+                
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: ${percent}%">
+                        ${percent}%
+                    </div>
+                </div>
+                
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-label">Total Players</div>
+                        <div class="stat-value">${total > 0 ? total.toLocaleString() : (inDb > 0 ? 'N/A' : '0')}</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Processed (This Fetch)</div>
+                        <div class="stat-value">${processed.toLocaleString()}</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">In Database</div>
+                        <div class="stat-value">${inDb.toLocaleString()}</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Remaining</div>
+                        <div class="stat-value">${(total - processed).toLocaleString()}</div>
+                    </div>
+                </div>
+                
+                ${status.started_at ? `<div class="stat-label">Started: ${new Date(status.started_at).toLocaleString()}</div>` : ''}
+                ${status.error ? `<div class="error-message" style="display: block;">Error: ${status.error}</div>` : ''}
+                
+                <div class="controls" style="margin-top: 15px;">
+                    ${status.status === 'running' || status.status === 'paused' ? 
+                        `<button class="btn-control btn-${status.status === 'paused' ? 'resume' : 'pause'}" 
+                                onclick="${status.status === 'paused' ? 'resume' : 'pause'}Fetch(${bucketId})">
+                            ${status.status === 'paused' ? '▶ Resume' : '⏸ Pause'}
+                        </button>
+                        <button class="btn-control btn-stop" onclick="stopFetch(${bucketId})">⏹ Stop</button>` :
+                        `<button class="btn-control btn-start" onclick="startFetch(${bucketId})">▶ Start</button>`
+                    }
+                </div>
+            `;
+            
+            return card;
+        }
+
+        function getSeasonName(bucketId) {
+            const names = {
+                11: '(2025-2026)',
+                10: '(2024-2025)',
+                9: '(2023-2024)',
+                8: '(2022-2023)',
+                7: '(2021-2022)'
+            };
+            return names[bucketId] || '';
+        }
+
+        async function startFetch(bucketId) {
+            try {
+                const response = await fetch(`${API_BASE}/fetch-data/${bucketId}`, { method: 'POST' });
+                const data = await response.json();
+                alert(`Fetch started for Season ${bucketId} (Limited to 100 players)`);
+                setTimeout(refreshStatus, 1000);
+            } catch (error) {
+                alert(`Error starting fetch: ${error.message}`);
+            }
+        }
+
+        async function pauseFetch(bucketId) {
+            try {
+                const response = await fetch(`${API_BASE}/fetch-control/${bucketId}/pause`, { method: 'POST' });
+                const data = await response.json();
+                alert(`Fetch paused for Season ${bucketId}`);
+                setTimeout(refreshStatus, 500);
+            } catch (error) {
+                alert(`Error pausing fetch: ${error.message}`);
+            }
+        }
+
+        async function resumeFetch(bucketId) {
+            try {
+                const response = await fetch(`${API_BASE}/fetch-control/${bucketId}/resume`, { method: 'POST' });
+                const data = await response.json();
+                alert(`Fetch resumed for Season ${bucketId}`);
+                setTimeout(refreshStatus, 500);
+            } catch (error) {
+                alert(`Error resuming fetch: ${error.message}`);
+            }
+        }
+
+        async function stopFetch(bucketId) {
+            if (!confirm(`Are you sure you want to stop the fetch for Season ${bucketId}?`)) return;
+            
+            try {
+                const response = await fetch(`${API_BASE}/fetch-control/${bucketId}/stop`, { method: 'POST' });
+                const data = await response.json();
+                alert(`Fetch stopped for Season ${bucketId}`);
+                setTimeout(refreshStatus, 500);
+            } catch (error) {
+                alert(`Error stopping fetch: ${error.message}`);
+            }
+        }
+
+        async function startAllFetches() {
+            if (!confirm('Start fetches for all seasons (Limited to 100 players each)?')) return;
+            
+            for (const bucketId of [7, 8, 9, 10, 11]) {
+                try {
+                    await fetch(`${API_BASE}/fetch-data/${bucketId}`, { method: 'POST' });
+                } catch (error) {
+                    console.error(`Error starting Season ${bucketId}:`, error);
+                }
+            }
+            alert('All fetches started (Limited to 100 players each)');
+            setTimeout(refreshStatus, 2000);
+        }
+
+        async function stopAllFetches() {
+            if (!confirm('Stop ALL running fetches?')) return;
+            
+            for (const bucketId of [7, 8, 9, 10, 11]) {
+                try {
+                    await fetch(`${API_BASE}/fetch-control/${bucketId}/stop`, { method: 'POST' });
+                } catch (error) {
+                    console.error(`Error stopping Season ${bucketId}:`, error);
+                }
+            }
+            alert('All fetches stopped');
+            setTimeout(refreshStatus, 500);
+        }
+
+        async function resumeAllFetches() {
+            for (const bucketId of [7, 8, 9, 10, 11]) {
+                try {
+                    await fetch(`${API_BASE}/fetch-control/${bucketId}/resume`, { method: 'POST' });
+                } catch (error) {
+                    console.error(`Error resuming Season ${bucketId}:`, error);
+                }
+            }
+            alert('Attempted to resume all paused fetches');
+            setTimeout(refreshStatus, 500);
+        }
+
+        async function checkDbHealth() {
+            try {
+                const response = await fetch(`${API_BASE}/db-health`);
+                const data = await response.json();
+                const healthDiv = document.getElementById('dbHealthInfo');
+                
+                if (data.status === 'healthy') {
+                    healthDiv.innerHTML = `
+                        <strong>✅ Database Health Check</strong><br>
+                        <small>Total Records: ${data.total_records.toLocaleString()}</small><br>
+                        <small>Bucket Counts: ${JSON.stringify(data.bucket_counts, null, 2)}</small><br>
+                        <small>Last Check: ${new Date(data.timestamp).toLocaleString()}</small>
+                    `;
+                    healthDiv.style.display = 'block';
+                    healthDiv.style.background = '#d4edda';
+                    healthDiv.style.color = '#155724';
+                } else {
+                    healthDiv.innerHTML = `
+                        <strong>⚠️ Database Health Check</strong><br>
+                        <small>Status: ${data.status}</small><br>
+                        <small>Error: ${data.error || 'Unknown error'}</small>
+                    `;
+                    healthDiv.style.display = 'block';
+                    healthDiv.style.background = '#f8d7da';
+                    healthDiv.style.color = '#721c24';
+                }
+            } catch (error) {
+                console.error('Error checking DB health:', error);
+                const healthDiv = document.getElementById('dbHealthInfo');
+                healthDiv.innerHTML = `<strong>❌ Error:</strong> ${error.message}`;
+                healthDiv.style.display = 'block';
+                healthDiv.style.background = '#f8d7da';
+                healthDiv.style.color = '#721c24';
+            }
+        }
+
+        async function startEventIndexing(bucketId) {
+            const skipProcessed = document.getElementById('skipProcessedCheckbox').checked;
+            const message = `Start indexing events for Season ${bucketId}? (Local mode: 100 players max, Open #2 Tier 1 Singles only)`;
+            
+            if (!confirm(message)) return;
+            
+            try {
+                const url = `${API_BASE}/index-events/${bucketId}?skip_processed=${skipProcessed}`;
+                const response = await fetch(url, { 
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Basic ' + btoa('tesliker:outkast')
+                    }
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+                    throw new Error(errorData.detail || `HTTP ${response.status}`);
+                }
+                
+                const data = await response.json();
+                alert(`Event indexing started for Season ${bucketId} (Local mode)`);
+                updateEventIndexingStatus('running', bucketId);
+                setTimeout(checkEventIndexingStatus, 1000);
+            } catch (error) {
+                alert(`Error starting event indexing: ${error.message}`);
+                console.error('Error:', error);
+            }
+        }
+
+        async function checkEventIndexingStatus() {
+            try {
+                const statusResponse11 = await fetch(`${API_BASE}/event-indexing-status/11`, {
+                    headers: {
+                        'Authorization': 'Basic ' + btoa('tesliker:outkast')
+                    }
+                });
+                const status11 = await statusResponse11.json();
+                
+                const infoDiv = document.getElementById('eventIndexingInfo');
+                const statusBadge = document.getElementById('eventIndexingStatus');
+                const progressDiv = document.getElementById('eventIndexingProgress');
+                const progressBar = document.getElementById('eventIndexingProgressBar');
+                const statsDiv = document.getElementById('eventIndexingStats');
+                
+                if (status11.status === 'running') {
+                    progressDiv.style.display = 'block';
+                    infoDiv.style.display = 'none';
+                    
+                    const total = status11.total_players || 0;
+                    const processed = status11.processed_players || 0;
+                    const percent = total > 0 ? Math.round((processed / total) * 100) : 0;
+                    
+                    progressBar.style.width = `${percent}%`;
+                    progressBar.textContent = `${percent}%`;
+                    
+                    statsDiv.innerHTML = `
+                        <div class="stat-item">
+                            <div class="stat-label">Total Players</div>
+                            <div class="stat-value">${total.toLocaleString()}</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">Processed</div>
+                            <div class="stat-value">${processed.toLocaleString()}</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">New Events</div>
+                            <div class="stat-value">${(status11.new_events_indexed || 0).toLocaleString()}</div>
+                        </div>
+                    `;
+                    
+                    statusBadge.textContent = 'RUNNING';
+                    statusBadge.className = 'status-badge status-running';
+                } else {
+                    progressDiv.style.display = 'none';
+                    statusBadge.textContent = status11.status === 'completed' ? 'COMPLETED' : 'NOT RUNNING';
+                    statusBadge.className = 'status-badge ' + (status11.status === 'completed' ? 'status-completed' : 'status-not_running');
+                }
+            } catch (error) {
+                console.error('Error checking event indexing status:', error);
+            }
+        }
+
+        function updateEventIndexingStatus(status, bucketId) {
+            const statusBadge = document.getElementById('eventIndexingStatus');
+            statusBadge.textContent = status.toUpperCase();
+            statusBadge.className = 'status-badge ' + (status === 'running' ? 'status-running' : 'status-not_running');
+        }
+
+        let currentLogKey = null;
+        let logPollInterval = null;
+
+        async function startGameIndexingForAllEvents() {
+            if (!confirm(`Start indexing games for ALL existing events? This will process all events in the database.`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/index-games-for-all-events`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Basic ' + btoa('tesliker:outkast')
+                    }
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+                    throw new Error(errorData.detail || `HTTP ${response.status}`);
+                }
+                
+                const data = await response.json();
+                alert(`Game indexing started for ${data.events_count} events: ${data.message}`);
+                if (data.log_key) {
+                    currentLogKey = data.log_key;
+                    startLogPolling(data.log_key);
+                }
+                setTimeout(checkGameIndexingStatus, 1000);
+            } catch (error) {
+                alert(`Error starting game indexing: ${error.message}`);
+                console.error('Error:', error);
+            }
+        }
+
+        async function startGameIndexing(bucketId) {
+            if (!confirm(`Start indexing games for Season ${bucketId}? (Local mode: Open #2 Winter Haven events only)`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/index-games/${bucketId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Basic ' + btoa('tesliker:outkast')
+                    }
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+                    throw new Error(errorData.detail || `HTTP ${response.status}`);
+                }
+                
+                const data = await response.json();
+                alert(`Game indexing started: ${data.message}`);
+                if (data.log_key) {
+                    currentLogKey = data.log_key;
+                    startLogPolling(data.log_key);
+                }
+                setTimeout(checkGameIndexingStatus, 1000);
+            } catch (error) {
+                alert(`Error starting game indexing: ${error.message}`);
+                console.error('Error:', error);
+            }
+        }
+
+        async function checkGameIndexingStatus() {
+            try {
+                // Check for season-level status (local mode)
+                const response11 = await fetch(`${API_BASE}/game-indexing-status/11`);
+                const status11 = await response11.json();
+                
+                // Also check for individual event status
+                const allStatusResponse = await fetch(`/api/game-indexing-status`);
+                const allStatus = await allStatusResponse.json().catch(() => ({ statuses: {} }));
+                
+                // Use season-level status if available, otherwise try to find any active status
+                let activeStatus = status11;
+                if (status11.status === 'not_running' && allStatus.statuses) {
+                    // Find first running status
+                    const runningStatuses = Object.values(allStatus.statuses).filter(s => s.status === 'running');
+                    if (runningStatuses.length > 0) {
+                        activeStatus = runningStatuses[0];
+                    }
+                }
+                
+                updateGameIndexingStatus(activeStatus, 11);
+            } catch (error) {
+                console.error('Error checking game indexing status:', error);
+            }
+        }
+
+        function updateGameIndexingStatus(activeStatus, bucketId) {
+            const statusBadge = document.getElementById('gameIndexingStatus');
+            const progressDiv = document.getElementById('gameIndexingProgress');
+            const statsDiv = document.getElementById('gameIndexingStats');
+            const infoDiv = document.getElementById('gameIndexingInfo');
+            
+            if (!activeStatus || activeStatus.status === 'not_running') {
+                statusBadge.textContent = 'NOT RUNNING';
+                statusBadge.className = 'status-badge status-not_running';
+                progressDiv.style.display = 'none';
+                return;
+            }
+            
+            statusBadge.textContent = activeStatus.status.toUpperCase();
+            if (activeStatus.status === 'running') {
+                statusBadge.className = 'status-badge status-running';
+                progressDiv.style.display = 'block';
+            } else if (activeStatus.status === 'completed') {
+                statusBadge.className = 'status-badge status-completed';
+            }
+            
+            // Handle different status formats (season-level vs event-level)
+            const total = activeStatus.total_events || activeStatus.total_games || 0;
+            const processed = activeStatus.processed_events || activeStatus.processed_games || 0;
+            const currentMatch = activeStatus.current_match || activeStatus.current_event || null;
+            const progress = total > 0 ? Math.round((processed / total) * 100) : 0;
+            
+            const progressBar = document.getElementById('gameIndexingProgressBar');
+            progressBar.style.width = `${progress}%`;
+            progressBar.textContent = `${progress}%`;
+            
+            statsDiv.innerHTML = `
+                <div class="stat-item">
+                    <div class="stat-label">Total ${activeStatus.total_events !== undefined ? 'Events' : 'Games'}</div>
+                    <div class="stat-value">${total.toLocaleString()}</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Processed</div>
+                    <div class="stat-value">${processed.toLocaleString()}</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">New Games</div>
+                    <div class="stat-value">${(activeStatus.new_games_indexed || 0).toLocaleString()}</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Total Games</div>
+                    <div class="stat-value">${(activeStatus.total_games || 0).toLocaleString()}</div>
+                </div>
+                ${currentMatch ? `<div class="stat-item" style="grid-column: 1 / -1;">
+                    <div class="stat-label">Current Match/Event</div>
+                    <div class="stat-value">${currentMatch}</div>
+                </div>` : ''}
+            `;
+            
+            if (activeStatus.error) {
+                infoDiv.style.display = 'block';
+                infoDiv.innerHTML = `<strong>Error:</strong> ${activeStatus.error}`;
+                infoDiv.style.background = '#f8d7da';
+                infoDiv.style.color = '#721c24';
+            }
+        }
+
+        // Auto-refresh every 5 seconds - wrap in function to avoid immediate execution issues
+        setInterval(function() {
+            try {
+                refreshStatus();
+            } catch (e) {
+                console.error('Error in refreshStatus interval:', e);
+            }
+        }, 5000);
+        setInterval(function() {
+            try {
+                checkEventIndexingStatus();
+            } catch (e) {
+                console.error('Error in checkEventIndexingStatus interval:', e);
+            }
+        }, 5000);
+        function startLogPolling(logKey) {
+            // Stop any existing polling
+            if (logPollInterval) {
+                clearInterval(logPollInterval);
+            }
+            
+            // Show logs container
+            const logsDiv = document.getElementById('gameIndexingLogs');
+            logsDiv.style.display = 'block';
+            
+            // Poll for logs every 2 seconds
+            logPollInterval = setInterval(async () => {
+                try {
+                    const response = await fetch(`/api/game-indexing-logs/${logKey}`);
+                    if (!response.ok) {
+                        console.error('Failed to fetch logs:', response.status, response.statusText);
+                        return;
+                    }
+                    const data = await response.json();
+                    console.log('Logs response:', data);
+                    updateGameIndexingLogs(data.logs || []);
+                } catch (error) {
+                    console.error('Error fetching logs:', error);
+                }
+            }, 2000);
+            
+            // Initial fetch immediately - wrap in async IIFE
+            (async function() {
+                try {
+                    const response = await fetch(`/api/game-indexing-logs/${logKey}`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        console.log('Initial logs response:', data);
+                        updateGameIndexingLogs(data.logs || []);
+                    } else {
+                        console.error('Failed to fetch initial logs:', response.status);
+                    }
+                } catch (err) {
+                    console.error('Error fetching initial logs:', err);
+                }
+            })();
+        }
+
+        function updateGameIndexingLogs(logs) {
+            const logsContent = document.getElementById('gameIndexingLogsContent');
+            console.log('Updating logs, count:', logs ? logs.length : 0, 'logs:', logs);
+            if (!logs || logs.length === 0) {
+                logsContent.innerHTML = '<em style="color: #888;">No logs yet... (checking for logs...)</em>';
+                // Store raw logs for copying
+                logsContent.dataset.rawLogs = '';
+                return;
+            }
+            
+            // Store raw logs for copying
+            logsContent.dataset.rawLogs = logs.join('\n');
+            
+            // Show last 100 logs
+            const recentLogs = logs.slice(-100);
+            logsContent.innerHTML = recentLogs.map(log => {
+                // Color code different log types
+                let logHtml = log;
+                if (log.includes('✓')) {
+                    logHtml = `<span style="color: #4caf50;">${log}</span>`;
+                } else if (log.includes('✗') || log.includes('ERROR')) {
+                    logHtml = `<span style="color: #f44336;">${log}</span>`;
+                } else if (log.includes('Processing') || log.includes('Indexing')) {
+                    logHtml = `<span style="color: #2196f3;">${log}</span>`;
+                } else if (log.includes('Found') || log.includes('Discovered')) {
+                    logHtml = `<span style="color: #ff9800;">${log}</span>`;
+                }
+                return logHtml;
+            }).join('<br>');
+            
+            // Auto-scroll to bottom
+            logsContent.scrollTop = logsContent.scrollHeight;
+        }
+
+        function copyGameIndexingLogs() {
+            const logsContent = document.getElementById('gameIndexingLogsContent');
+            const rawLogs = logsContent.dataset.rawLogs || '';
+            
+            if (!rawLogs) {
+                alert('No logs to copy');
+                return;
+            }
+            
+            // Copy to clipboard
+            navigator.clipboard.writeText(rawLogs).then(() => {
+                const button = document.getElementById('copyLogsButton');
+                const originalText = button.textContent;
+                button.textContent = '✓ Copied!';
+                button.style.background = '#4caf50';
+                setTimeout(() => {
+                    button.textContent = originalText;
+                    button.style.background = '#2196f3';
+                }, 2000);
+            }).catch(err => {
+                console.error('Failed to copy logs:', err);
+                alert('Failed to copy logs. Please select and copy manually.');
+            });
+        }
+
+        setInterval(function() {
+            try {
+                checkGameIndexingStatus();
+            } catch (e) {
+                console.error('Error in checkGameIndexingStatus interval:', e);
+            }
+        }, 5000);
+        
+        // Initial load - use setTimeout to ensure all functions are defined first
+        setTimeout(function() {
+            try {
+                if (typeof refreshStatus === 'function') {
+                    refreshStatus();
+                } else {
+                    console.error('refreshStatus is not a function');
+                }
+                if (typeof checkEventIndexingStatus === 'function') {
+                    checkEventIndexingStatus();
+                } else {
+                    console.error('checkEventIndexingStatus is not a function');
+                }
+            } catch (error) {
+                console.error('Error during initial load:', error);
+                const container = document.getElementById('fetchStatusContainer');
+                if (container) {
+                    container.innerHTML = `<div class="status-card"><p style="color: red;">Error loading page: ${error.message}</p><p>Check browser console for details.</p></div>`;
+                }
+            }
+        }, 100);
+        
+        // Global error handler for button clicks
+        window.addEventListener('error', function(event) {
+            console.error('Global error:', event.error);
+            alert('An error occurred: ' + (event.error?.message || event.message || 'Unknown error'));
+        });
+        
+        // Expose all functions to window for onclick handlers
+        window.refreshStatus = refreshStatus;
+        window.startAllFetches = startAllFetches;
+        window.stopAllFetches = stopAllFetches;
+        window.resumeAllFetches = resumeAllFetches;
+        window.startFetch = startFetch;
+        window.pauseFetch = pauseFetch;
+        window.resumeFetch = resumeFetch;
+        window.stopFetch = stopFetch;
+        window.checkDbHealth = checkDbHealth;
+        window.startEventIndexing = startEventIndexing;
+        window.checkEventIndexingStatus = checkEventIndexingStatus;
+        async function startCacheIndexStats(bucketId) {
+            const bucketText = bucketId ? `Season ${bucketId}` : 'all seasons';
+            if (!confirm(`Start cache indexing stats for ${bucketText}? This will pre-compute aggregated stats for faster page loads.`)) {
+                return;
+            }
+            
+            try {
+                const url = bucketId 
+                    ? `/api/cache-index-stats?bucket_id=${bucketId}`
+                    : '/api/cache-index-stats';
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                alert(`Cache indexing started: ${data.message}\nProcessing ${data.brackets_count} brackets and ${data.groups_count} groups.`);
+                
+                // Start polling for status
+                if (data.status_key) {
+                    startCacheStatusPolling(data.status_key);
+                }
+            } catch (error) {
+                alert(`Error starting cache indexing: ${error.message}`);
+            }
+        }
+        
+        let cacheStatusInterval = null;
+        
+        function startCacheStatusPolling(statusKey) {
+            // Stop any existing polling
+            if (cacheStatusInterval) {
+                clearInterval(cacheStatusInterval);
+            }
+            
+            // Poll every 2 seconds
+            cacheStatusInterval = setInterval(async () => {
+                try {
+                    const response = await fetch(`/api/cache-indexing-status`);
+                    if (!response.ok) return;
+                    
+                    const status = await response.json();
+                    updateCacheIndexingStatus(status);
+                    
+                    // Stop polling if completed or error
+                    if (status.status === 'completed' || status.status === 'error') {
+                        clearInterval(cacheStatusInterval);
+                        cacheStatusInterval = null;
+                    }
+                } catch (error) {
+                    console.error('Error checking cache indexing status:', error);
+                }
+            }, 2000);
+            
+            // Also start polling logs
+            if (statusKey) {
+                startCacheLogPolling(statusKey);
+            }
+        }
+        
+        let cacheLogInterval = null;
+        
+        function startCacheLogPolling(statusKey) {
+            if (cacheLogInterval) {
+                clearInterval(cacheLogInterval);
+            }
+            
+            cacheLogInterval = setInterval(async () => {
+                try {
+                    const response = await fetch(`/api/cache-indexing-logs/${statusKey}`);
+                    if (!response.ok) return;
+                    
+                    const data = await response.json();
+                    updateCacheIndexingLogs(data.logs || []);
+                } catch (error) {
+                    console.error('Error fetching cache indexing logs:', error);
+                }
+            }, 1000);
+        }
+        
+        function updateCacheIndexingStatus(status) {
+            // Update a status display element (you may need to add this to HTML)
+            console.log('Cache indexing status:', status);
+            
+            if (status.status === 'running') {
+                const progress = status.total_brackets > 0 
+                    ? Math.round(((status.processed_brackets || 0) / status.total_brackets) * 100)
+                    : 0;
+                console.log(`Progress: ${status.processed_brackets || 0}/${status.total_brackets} brackets, ${status.processed_groups || 0}/${status.total_groups} groups (${progress}%)`);
+                if (status.current_item) {
+                    console.log(`Current: ${status.current_item}`);
+                }
+            }
+        }
+        
+        function updateCacheIndexingLogs(logs) {
+            // Logs will be displayed in console
+            // You can also add a UI element to display them
+            if (logs.length > 0) {
+                const lastLog = logs[logs.length - 1];
+                console.log(lastLog);
+            }
+        }
+        
+        window.startGameIndexingForAllEvents = startGameIndexingForAllEvents;
+        window.startGameIndexing = startGameIndexing;
+        window.startCacheIndexStats = startCacheIndexStats;
+        window.checkGameIndexingStatus = checkGameIndexingStatus;
+    </script>
+</body>
+</html>
+

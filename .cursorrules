@@ -1,0 +1,230 @@
+# Fly Cornhole - ACL Player Statistics Application
+
+## Project Overview
+This is a FastAPI application that fetches, stores, and displays cornhole player statistics from the ACL (American Cornhole League) API. The application tracks player data, event data, game data, and provides aggregated statistics for tournaments and events.
+
+## Tech Stack
+- **Backend**: FastAPI (Python 3.11+)
+- **Database**: SQLite (local) / PostgreSQL (production via Fly.io)
+- **ORM**: SQLAlchemy (async)
+- **Deployment**: Fly.io
+- **Frontend**: Vanilla JavaScript, HTML/CSS
+
+## Key Files and Their Purposes
+
+### Core Application Files
+- **`main.py`**: Main FastAPI application with all API endpoints, background tasks, status tracking, and route handlers
+- **`database.py`**: SQLAlchemy models and database connection setup (async)
+- **`fetcher.py`**: Functions to fetch data from ACL API endpoints (httpx async)
+- **`event_indexer.py`**: Logic for discovering and indexing event data from player event lists
+- **`game_indexer.py`**: Logic for discovering and indexing game/match data from bracket data
+- **`stats_calculator.py`**: Functions for calculating aggregated player statistics and caching them
+
+### Templates (HTML)
+- **`templates/index.html`**: Main player search/filter interface
+- **`templates/admin.html`**: Admin interface for triggering data fetches (production)
+- **`templates/admin-local.html`**: Local admin interface for testing with limited data
+- **`templates/events.html`**: Events listing page with grouping
+- **`templates/event_detail.html`**: Individual/grouped event detail page with player stats
+
+### Static Files
+- **`static/app.js`**: Frontend JavaScript for player search, filtering, and event display
+- **`static/styles.css`**: Styling
+
+## Database Schema Overview
+
+### Key Models
+- **`Player`**: Player snapshots with stats (allows multiple snapshots per player/bucket/date)
+- **`Event`**: Event/tournament information with bracket grouping
+- **`PlayerEventStats`**: Player statistics for specific events
+- **`EventStanding`**: Final standings for events
+- **`EventMatch`**: Match information (rounds, players, scores)
+- **`EventGame`**: Individual game data within matches
+- **`EventAggregatedStats`**: Pre-computed aggregated stats cache (for fast page loads)
+
+### Important Event Fields
+- `event_id`: Unique API event ID
+- `base_event_name`: Normalized base name (e.g., "Open #2 Winter Haven")
+- `bracket_name`: Specific bracket (e.g., "Tier 1 Singles Bracket C")
+- `game_data`: JSON column storing raw bracket data from API
+- `games_fully_indexed`: Boolean flag for indexing completion
+
+## Important Patterns and Conventions
+
+### Async/Await
+- All database operations use async SQLAlchemy (`async_session_maker`)
+- All API calls use `httpx.AsyncClient()`
+- Background tasks use FastAPI's `BackgroundTasks` or `asyncio.create_task()`
+
+### Status Tracking
+- In-memory dictionaries track status: `fetch_status`, `game_indexing_status`, `event_indexing_status`, `cache_indexing_status`
+- Log buffers: `game_indexing_logs`, `cache_indexing_logs`
+- Status keys format: `season_{bucket_id}`, `local_{bucket_id}`, `cache_{bucket_id}`, etc.
+
+### Caching System
+- `EventAggregatedStats` table stores pre-computed stats
+- Cache keys format:
+  - Individual bracket: `event_{event_id}`
+  - Grouped events: `grouped_{base_event_name}_{bracket_type}`
+- `games_hash` field detects when underlying data changes (triggers recalculation)
+- Cache indexing endpoint: `/api/cache-index-stats`
+
+### Bracket Type Normalization
+Bracket names are normalized consistently across the codebase:
+1. Replace dashes: `re.sub(r'\s*-\s*', ' ', bracket_name)`
+2. Remove "Final X" or "Final" suffix
+3. Remove "Bracket X" or "Bracket" suffix
+4. Clean multiple spaces: `re.sub(r'\s+', ' ', ...).strip()`
+
+Example: "Tier 1 Doubles - Bracket A" → "Tier 1 Doubles"
+
+### Event Grouping
+Events are grouped by `base_event_name` and normalized `bracket_type`. The `/api/events` endpoint groups related brackets (e.g., all "Tier 1 Singles" brackets) into a single display entry.
+
+### Data Fetching Workflows
+
+#### Player Data Fetching
+1. Fetch standings from ACL API for a bucket_id (season)
+2. Store player snapshots (allows multiple snapshots per player)
+3. Uses `fetch_status` dictionary for progress tracking
+
+#### Event Indexing
+1. Discover events from player event lists (`/api/v1/player-events-list/playerID/{player_id}/bucketID/{bucket_id}`)
+2. Filter events (local mode: only `OPEN_2_WINTER_HAVEN_EVENT_IDS`)
+3. Index event metadata (name, date, location, etc.)
+4. Fetch and store bracket data in `Event.game_data` JSON column
+5. Extract `base_event_name` and `bracket_name` for grouping
+
+#### Game Indexing
+1. Get bracket data from `Event.game_data` or fetch from API
+2. Extract `bracketmatchid` from `bracketDetails`
+3. Filter matches with empty `gameResults` (forfeited/unplayed)
+4. Fetch match stats: `/api/v1/match-stats/eventid/{event_id}/matchid/{match_id}/gameid/{game_id}`
+5. Iterate game_id (1, 2, 3...) until 404/409 (game doesn't exist)
+6. Store raw API responses in `raw_data` JSON columns
+
+#### Cache Indexing
+1. Calculate aggregated stats for each individual bracket
+2. Calculate aggregated stats for grouped events
+3. Store in `EventAggregatedStats` with `games_hash` for invalidation
+4. Can be run independently via `/api/cache-index-stats`
+
+## Important Constants
+
+### Seasons (Bucket IDs)
+- Buckets 0-11 supported (seasons 2014-2015 through 2025-2026)
+- Current season: 11
+- `BUCKET_YEAR_MAP` in `fetcher.py` maps bucket IDs to year ranges
+
+### Open #2 Winter Haven Event IDs
+List in `event_indexer.py`:
+```python
+OPEN_2_WINTER_HAVEN_EVENT_IDS = [
+    221756,  # Tier 1 Doubles Bracket A
+    221757,  # Tier 1 Doubles Bracket B
+    221803,  # Tier 1 Doubles Final
+    220573,  # Tier 1 Singles Bracket A
+    220574,  # Tier 1 Singles Bracket B
+    220575,  # Tier 1 Singles Bracket C
+    220576,  # Tier 1 Singles Bracket D
+    220577,  # Tier 1 Singles Final
+    # ... more events
+]
+```
+
+## API Endpoints
+
+### Main Routes
+- `GET /`: Player search interface
+- `GET /admin`: Admin interface (basic auth: tesliker/outkast)
+- `GET /admin-local`: Local admin interface (no auth currently)
+- `GET /events`: Events listing page
+- `GET /events/{event_id}`: Individual event detail page
+- `GET /events/grouped`: Grouped event stats page
+
+### API Endpoints
+- `POST /api/fetch-data/{bucket_id}`: Trigger player data fetch
+- `GET /api/players`: Get players with filtering/sorting/pagination
+- `POST /api/local/index-events/{bucket_id}`: Index events (local: 100 players, Open #2 events only)
+- `POST /api/local/index-games/{bucket_id}`: Index games for events (local mode)
+- `POST /api/index-games-for-all-events`: Index games for all events
+- `POST /api/cache-index-stats`: Pre-compute and cache aggregated stats
+- `GET /api/events`: Get events list (with grouping)
+- `GET /api/events/grouped`: Get combined stats for grouped events
+- `GET /api/events/{event_id}`: Get event details with cached stats
+- `GET /api/game-indexing-status/{event_id}`: Get game indexing status
+- `GET /api/cache-indexing-status`: Get cache indexing status
+
+## Local Development vs Production
+
+### Local Development
+- SQLite database (`cornhole.db`)
+- `/admin-local` page with limited data:
+  - 100 players max per season
+  - Only Open #2 Winter Haven events indexed
+- No authentication required for `/admin-local`
+
+### Production
+- PostgreSQL database (Fly.io)
+- Full data indexing
+- Basic auth on `/admin` page
+- Weekly scheduled fetch for season 11 (Mondays 3 AM UTC)
+
+## Common Workflows
+
+### Adding a New Season
+1. Update `BUCKET_YEAR_MAP` in `fetcher.py`
+2. Update `defaultSeasons` arrays in `static/app.js` and `templates/admin.html`
+
+### Indexing Events Locally
+1. Go to `http://localhost:8000/admin-local`
+2. Click "Index Events for Season 11"
+3. Events from `OPEN_2_WINTER_HAVEN_EVENT_IDS` will be indexed
+
+### Indexing Games
+1. Events must be indexed first (provides bracket data)
+2. Click "Index Games for Season 11" or "Index Games for All Events"
+3. Games are discovered from `bracketDetails` in bracket data
+4. Status/logs available via API endpoints
+
+### Caching Stats
+1. After games are indexed, run "Cache Index Stats"
+2. This pre-computes aggregated stats for fast page loads
+3. Cache is invalidated when `games_hash` changes
+
+### Debugging
+- Check server console logs for status updates
+- Use `/api/game-indexing-logs/{log_key}` for game indexing logs
+- Use `/api/cache-indexing-logs/{status_key}` for cache indexing logs
+- Browser console shows frontend errors
+
+## Error Handling
+
+### API Errors
+- 404/409 HTTP status codes are treated as "data doesn't exist" (not fatal)
+- API responses with `"status": "ERROR"` return `None`
+- All 4xx errors (404, 409, etc.) are treated as expected "not found" cases
+
+### Database Schema
+- Schema changes require manual `ALTER TABLE` for existing SQLite databases
+- New columns are added to models but may not exist in DB until migration
+- Code should gracefully handle missing columns when possible
+
+## Deployment
+
+### Fly.io
+- App name: `fly-cornhole`
+- Deploy: `fly deploy --app fly-cornhole`
+- Database: SQLite with mounted volume (or PostgreSQL attached)
+- Cron jobs: Scheduled via APScheduler (weekly fetch)
+
+## Important Notes
+
+- **Raw Data Preservation**: All raw API responses are stored in JSON columns (`raw_data`, `game_data`) to ensure no data is lost
+- **Status Tracking**: All long-running operations use in-memory status dictionaries for real-time progress
+- **Bracket Normalization**: Must be consistent across cache indexing, event grouping, and querying
+- **Cache Invalidation**: Uses `games_hash` to detect when underlying game data changes
+- **Local Events**: "Local" events are excluded unless they are "finals" (contain "Final" in name) or in `OPEN_2_WINTER_HAVEN_EVENT_IDS`
+
+
+

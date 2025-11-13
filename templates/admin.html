@@ -116,6 +116,13 @@
             margin-top: 10px;
             font-style: italic;
         }
+        .section-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 30px 0 20px 0;
+        }
     </style>
 </head>
 <body>
@@ -123,10 +130,6 @@
         <div class="admin-header">
             <h1>🔧 Admin - Fetch Control Panel</h1>
             <p>Monitor and control data fetching operations</p>
-        </div>
-
-        <div id="fetchStatusContainer">
-            <!-- Status cards will be inserted here -->
         </div>
 
         <div class="status-card">
@@ -142,10 +145,73 @@
                 <!-- DB health info will appear here -->
             </div>
         </div>
+
+        <div class="section-header">
+            <h2>👥 Player Data Fetching</h2>
+        </div>
+        <div id="fetchStatusContainer">
+            <!-- Status cards will be inserted here -->
+        </div>
+
+        <div class="section-header">
+            <h2>🎯 Event Indexing</h2>
+        </div>
+        <div class="status-card">
+            <p style="color: #666; margin-bottom: 15px;">
+                Index event data (regionals, opens, nationals) for GPT queries. This discovers events from player event lists and indexes all event data.
+            </p>
+            <div style="margin-bottom: 15px;">
+                <label style="display: flex; align-items: center; gap: 10px;">
+                    <input type="checkbox" id="skipProcessedCheckbox" checked style="width: 18px; height: 18px;">
+                    <span>Skip players who already have events indexed (faster, recommended)</span>
+                </label>
+                <small style="color: #666; display: block; margin-top: 5px; margin-left: 28px;">
+                    Uncheck to re-process all players (useful if you want to catch events from players already processed)
+                </small>
+            </div>
+            <div class="controls">
+                <button onclick="deleteLocalEvents()" class="btn-control" style="background: #dc3545; color: white;">🗑️ Delete Local Events</button>
+            </div>
+        </div>
+        <div id="eventIndexingStatusContainer">
+            <!-- Event indexing status cards will be inserted here -->
+        </div>
+
+        <div class="section-header">
+            <h2>🎮 Game/Match Indexing</h2>
+        </div>
+        <div class="status-card">
+            <p style="color: #666; margin-bottom: 15px;">
+                Index individual game/match data for events. This enables queries like "who has thrown the most rounds in a match" or "best games of Open #2".
+                <br><strong>Note:</strong> Indexing automatically skips already-indexed games, so it's safe to deploy or restart.
+            </p>
+            <div class="controls">
+                <button class="btn-control btn-start" onclick="startGameIndexingForAllEvents()">Index Games for All Events</button>
+            </div>
+        </div>
+        <div id="gameIndexingStatusContainer">
+            <!-- Game indexing status cards will be inserted here -->
+        </div>
+
+        <div class="section-header">
+            <h2>📊 Cache Index Stats</h2>
+        </div>
+        <div class="status-card">
+            <p style="color: #666; margin-bottom: 15px;">
+                Pre-compute and cache aggregated stats for faster page loads. Run this after indexing games to build the cache.
+            </p>
+            <div class="controls">
+                <button class="btn-control btn-start" onclick="startCacheIndexStats()" style="background: #673ab7;">Cache Index Stats (All Seasons)</button>
+            </div>
+        </div>
+        <div id="cacheIndexingStatusContainer">
+            <!-- Cache indexing status cards will be inserted here -->
+        </div>
     </div>
 
     <script>
         const API_BASE = '/api';
+        const ALL_SEASONS = [11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0];
 
         async function refreshStatus() {
             try {
@@ -155,14 +221,60 @@
                 const container = document.getElementById('fetchStatusContainer');
                 container.innerHTML = '';
 
-                const seasons = [11, 10, 9, 8, 7];
-                
-                for (const bucketId of seasons) {
+                for (const bucketId of ALL_SEASONS) {
                     const status = data.fetch_status[bucketId] || await getBucketStatus(bucketId);
-                    container.appendChild(createStatusCard(bucketId, status));
+                    container.appendChild(createPlayerStatusCard(bucketId, status));
                 }
             } catch (error) {
                 console.error('Error refreshing status:', error);
+            }
+        }
+
+        async function refreshEventIndexingStatus() {
+            const container = document.getElementById('eventIndexingStatusContainer');
+            container.innerHTML = '';
+
+            for (const bucketId of ALL_SEASONS) {
+                try {
+                    const response = await fetch(`${API_BASE}/event-indexing-status/${bucketId}`);
+                    const status = await response.json();
+                    container.appendChild(createEventIndexingStatusCard(bucketId, status));
+                } catch (error) {
+                    console.error(`Error fetching event status for season ${bucketId}:`, error);
+                    container.appendChild(createEventIndexingStatusCard(bucketId, { status: 'not_running', bucket_id: bucketId }));
+                }
+            }
+        }
+
+        async function refreshGameIndexingStatus() {
+            const container = document.getElementById('gameIndexingStatusContainer');
+            container.innerHTML = '';
+
+            for (const bucketId of ALL_SEASONS) {
+                try {
+                    const response = await fetch(`${API_BASE}/game-indexing-status/${bucketId}`);
+                    const status = await response.json();
+                    container.appendChild(createGameIndexingStatusCard(bucketId, status));
+                } catch (error) {
+                    console.error(`Error fetching game status for season ${bucketId}:`, error);
+                    container.appendChild(createGameIndexingStatusCard(bucketId, { status: 'not_running', bucket_id: bucketId }));
+                }
+            }
+        }
+
+        async function refreshCacheIndexingStatus() {
+            const container = document.getElementById('cacheIndexingStatusContainer');
+            container.innerHTML = '';
+
+            for (const bucketId of ALL_SEASONS) {
+                try {
+                    const response = await fetch(`${API_BASE}/cache-indexing-status?bucket_id=${bucketId}`);
+                    const status = await response.json();
+                    container.appendChild(createCacheIndexingStatusCard(bucketId, status));
+                } catch (error) {
+                    console.error(`Error fetching cache status for season ${bucketId}:`, error);
+                    container.appendChild(createCacheIndexingStatusCard(bucketId, { status: 'not_running', bucket_id: bucketId }));
+                }
             }
         }
 
@@ -175,7 +287,7 @@
             }
         }
 
-        function createStatusCard(bucketId, status) {
+        function createPlayerStatusCard(bucketId, status) {
             const card = document.createElement('div');
             card.className = 'status-card';
             
@@ -183,8 +295,8 @@
             const statusLabel = (status.status || 'not_running').toUpperCase();
             
             const total = status.total_players || 0;
-            const processed = status.processed_players || 0; // Only show processed from current fetch
-            const inDb = status.records_in_db || 0; // Always show actual DB count
+            const processed = status.processed_players || 0;
+            const inDb = status.records_in_db || 0;
             const percent = total > 0 ? Math.round((processed / total) * 100) : (inDb > 0 && total === 0 ? 100 : 0);
             
             card.innerHTML = `
@@ -237,13 +349,190 @@
             return card;
         }
 
+        function createEventIndexingStatusCard(bucketId, status) {
+            const card = document.createElement('div');
+            card.className = 'status-card';
+            
+            const statusClass = `status-${status.status || 'not_running'}`;
+            const statusLabel = (status.status || 'not_running').toUpperCase();
+            
+            const total = status.total_players || 0;
+            const processed = status.processed_players || 0;
+            const percent = total > 0 ? Math.round((processed / total) * 100) : 0;
+            
+            card.innerHTML = `
+                <div class="status-header">
+                    <h3>Season ${bucketId} ${getSeasonName(bucketId)}</h3>
+                    <span class="status-badge ${statusClass}">${statusLabel}</span>
+                </div>
+                
+                ${status.status === 'running' ? `
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: ${percent}%">
+                        ${percent}%
+                    </div>
+                </div>
+                
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-label">Total Players</div>
+                        <div class="stat-value">${total.toLocaleString()}</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Processed</div>
+                        <div class="stat-value">${processed.toLocaleString()}</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">New Events</div>
+                        <div class="stat-value">${(status.new_events_indexed || 0).toLocaleString()}</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Total Events</div>
+                        <div class="stat-value">${(status.total_events || 0).toLocaleString()}</div>
+                    </div>
+                </div>
+                ` : ''}
+                
+                ${status.error ? `<div class="error-message" style="display: block;">Error: ${status.error}</div>` : ''}
+                
+                <div class="controls" style="margin-top: 15px;">
+                    <button class="btn-control btn-start" onclick="startEventIndexing(${bucketId})">▶ Index Events</button>
+                </div>
+            `;
+            
+            return card;
+        }
+
+        function createGameIndexingStatusCard(bucketId, status) {
+            const card = document.createElement('div');
+            card.className = 'status-card';
+            
+            const statusClass = `status-${status.status || 'not_running'}`;
+            const statusLabel = (status.status || 'not_running').toUpperCase();
+            
+            const total = status.total_events || 0;
+            const processed = status.processed_events || 0;
+            const percent = total > 0 ? Math.round((processed / total) * 100) : 0;
+            
+            card.innerHTML = `
+                <div class="status-header">
+                    <h3>Season ${bucketId} ${getSeasonName(bucketId)}</h3>
+                    <span class="status-badge ${statusClass}">${statusLabel}</span>
+                </div>
+                
+                ${status.status === 'running' ? `
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: ${percent}%">
+                        ${percent}%
+                    </div>
+                </div>
+                
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-label">Total Events</div>
+                        <div class="stat-value">${total.toLocaleString()}</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Processed</div>
+                        <div class="stat-value">${processed.toLocaleString()}</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">New Games</div>
+                        <div class="stat-value">${(status.new_games_indexed || 0).toLocaleString()}</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Total Games</div>
+                        <div class="stat-value">${(status.total_games || 0).toLocaleString()}</div>
+                    </div>
+                </div>
+                ${status.current_event ? `<div class="stat-item" style="grid-column: 1 / -1;">
+                    <div class="stat-label">Current Event</div>
+                    <div class="stat-value" style="font-size: 1rem;">${status.current_event}</div>
+                </div>` : ''}
+                ` : ''}
+                
+                ${status.error ? `<div class="error-message" style="display: block;">Error: ${status.error}</div>` : ''}
+                
+                <div class="controls" style="margin-top: 15px;">
+                    <button class="btn-control btn-start" onclick="startGameIndexing(${bucketId})">▶ Index Games</button>
+                </div>
+            `;
+            
+            return card;
+        }
+
+        function createCacheIndexingStatusCard(bucketId, status) {
+            const card = document.createElement('div');
+            card.className = 'status-card';
+            
+            const statusClass = `status-${status.status || 'not_running'}`;
+            const statusLabel = (status.status || 'not_running').toUpperCase();
+            
+            const total = status.total_brackets || 0;
+            const processed = status.processed_brackets || 0;
+            const percent = total > 0 ? Math.round((processed / total) * 100) : 0;
+            
+            card.innerHTML = `
+                <div class="status-header">
+                    <h3>Season ${bucketId} ${getSeasonName(bucketId)}</h3>
+                    <span class="status-badge ${statusClass}">${statusLabel}</span>
+                </div>
+                
+                ${status.status === 'running' ? `
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: ${percent}%">
+                        ${percent}%
+                    </div>
+                </div>
+                
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-label">Total Brackets</div>
+                        <div class="stat-value">${total.toLocaleString()}</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Processed</div>
+                        <div class="stat-value">${processed.toLocaleString()}</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Total Groups</div>
+                        <div class="stat-value">${(status.total_groups || 0).toLocaleString()}</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Processed Groups</div>
+                        <div class="stat-value">${(status.processed_groups || 0).toLocaleString()}</div>
+                    </div>
+                </div>
+                ${status.current_item ? `<div class="stat-item" style="grid-column: 1 / -1;">
+                    <div class="stat-label">Current Item</div>
+                    <div class="stat-value" style="font-size: 1rem;">${status.current_item}</div>
+                </div>` : ''}
+                ` : ''}
+                
+                ${status.error ? `<div class="error-message" style="display: block;">Error: ${status.error}</div>` : ''}
+                
+                <div class="controls" style="margin-top: 15px;">
+                    <button class="btn-control btn-start" onclick="startCacheIndexStats(${bucketId})" style="background: #673ab7;">▶ Cache Index Stats</button>
+                </div>
+            `;
+            
+            return card;
+        }
+
         function getSeasonName(bucketId) {
             const names = {
                 11: '(2025-2026)',
                 10: '(2024-2025)',
                 9: '(2023-2024)',
                 8: '(2022-2023)',
-                7: '(2021-2022)'
+                7: '(2021-2022)',
+                6: '(2020-2021)',
+                5: '(2019-2020)',
+                4: '(2018-2019)',
+                3: '(2017-2018)',
+                2: '(2016-2017)',
+                1: '(2015-2016)',
+                0: '(2014-2015)'
             };
             return names[bucketId] || '';
         }
@@ -295,9 +584,9 @@
         }
 
         async function startAllFetches() {
-            if (!confirm('Start fetches for all seasons (7, 8, 9, 10, 11)?')) return;
+            if (!confirm(`Start fetches for all seasons (0-11)?`)) return;
             
-            for (const bucketId of [7, 8, 9, 10, 11]) {
+            for (const bucketId of ALL_SEASONS) {
                 try {
                     await fetch(`${API_BASE}/fetch-data/${bucketId}`, { method: 'POST' });
                 } catch (error) {
@@ -311,7 +600,7 @@
         async function stopAllFetches() {
             if (!confirm('Stop ALL running fetches?')) return;
             
-            for (const bucketId of [7, 8, 9, 10, 11]) {
+            for (const bucketId of ALL_SEASONS) {
                 try {
                     await fetch(`${API_BASE}/fetch-control/${bucketId}/stop`, { method: 'POST' });
                 } catch (error) {
@@ -323,7 +612,7 @@
         }
 
         async function resumeAllFetches() {
-            for (const bucketId of [7, 8, 9, 10, 11]) {
+            for (const bucketId of ALL_SEASONS) {
                 try {
                     await fetch(`${API_BASE}/fetch-control/${bucketId}/resume`, { method: 'POST' });
                 } catch (error) {
@@ -372,12 +661,162 @@
             }
         }
 
+        async function startEventIndexing(bucketId) {
+            const skipProcessed = document.getElementById('skipProcessedCheckbox').checked;
+            const message = skipProcessed 
+                ? `Start indexing events for Season ${bucketId}? This will skip players who already have events indexed.`
+                : `Start indexing events for Season ${bucketId}? This will re-process ALL players (including those already processed).`;
+            
+            if (!confirm(message)) return;
+            
+            try {
+                const url = `${API_BASE}/index-events/${bucketId}?skip_processed=${skipProcessed}`;
+                const response = await fetch(url, { 
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Basic ' + btoa('tesliker:outkast')
+                    }
+                });
+                
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        throw new Error('Authentication required. Please log in.');
+                    }
+                    const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+                    throw new Error(errorData.detail || `HTTP ${response.status}`);
+                }
+                
+                const data = await response.json();
+                alert(`Event indexing started for Season ${bucketId}`);
+                setTimeout(refreshEventIndexingStatus, 1000);
+            } catch (error) {
+                alert(`Error starting event indexing: ${error.message}`);
+                console.error('Error:', error);
+            }
+        }
+
+        async function deleteLocalEvents() {
+            if (!confirm('Delete all local events (type "L") from the database? This will remove all local events and their related data (stats, matchups, standings). This action cannot be undone.')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/delete-local-events`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Basic ' + btoa('tesliker:outkast')
+                    }
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+                    throw new Error(errorData.detail || `HTTP ${response.status}`);
+                }
+                
+                const data = await response.json();
+                alert(`Success: ${data.message}`);
+                setTimeout(refreshEventIndexingStatus, 1000);
+            } catch (error) {
+                alert(`Error deleting local events: ${error.message}`);
+                console.error('Error:', error);
+            }
+        }
+
+        async function startGameIndexing(bucketId) {
+            if (!confirm(`Start indexing games for Season ${bucketId}? This will fetch all game/match data for all indexed events.`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/index-games/${bucketId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Basic ' + btoa('tesliker:outkast')
+                    }
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+                    throw new Error(errorData.detail || `HTTP ${response.status}`);
+                }
+                
+                const data = await response.json();
+                alert(`Game indexing started: ${data.message}`);
+                setTimeout(refreshGameIndexingStatus, 1000);
+            } catch (error) {
+                alert(`Error starting game indexing: ${error.message}`);
+                console.error('Error:', error);
+            }
+        }
+
+        async function startGameIndexingForAllEvents() {
+            if (!confirm(`Start indexing games for ALL existing events? This will process all events in the database.`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/index-games-for-all-events`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Basic ' + btoa('tesliker:outkast')
+                    }
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+                    throw new Error(errorData.detail || `HTTP ${response.status}`);
+                }
+                
+                const data = await response.json();
+                alert(`Game indexing started: ${data.message}`);
+                setTimeout(refreshGameIndexingStatus, 1000);
+            } catch (error) {
+                alert(`Error starting game indexing: ${error.message}`);
+                console.error('Error:', error);
+            }
+        }
+
+        async function startCacheIndexStats(bucketId) {
+            const bucketText = bucketId !== undefined ? `Season ${bucketId}` : 'all seasons';
+            if (!confirm(`Start cache indexing stats for ${bucketText}? This will pre-compute aggregated stats for faster page loads.`)) {
+                return;
+            }
+            
+            try {
+                const url = bucketId !== undefined 
+                    ? `${API_BASE}/cache-index-stats?bucket_id=${bucketId}`
+                    : `${API_BASE}/cache-index-stats`;
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Basic ' + btoa('tesliker:outkast')
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                alert(`Cache indexing started: ${data.message}\nProcessing ${data.brackets_count} brackets and ${data.groups_count} groups.`);
+                setTimeout(refreshCacheIndexingStatus, 1000);
+            } catch (error) {
+                alert(`Error starting cache indexing: ${error.message}`);
+            }
+        }
+
         // Auto-refresh every 5 seconds
         setInterval(refreshStatus, 5000);
+        setInterval(refreshEventIndexingStatus, 5000);
+        setInterval(refreshGameIndexingStatus, 5000);
+        setInterval(refreshCacheIndexingStatus, 5000);
         
         // Initial load
         refreshStatus();
+        refreshEventIndexingStatus();
+        refreshGameIndexingStatus();
+        refreshCacheIndexingStatus();
     </script>
 </body>
 </html>
-

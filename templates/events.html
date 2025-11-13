@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Events - Bag Stats</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <style>
+        .events-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+        .events-header h1 {
+            margin: 0;
+            font-size: 2rem;
+        }
+        .events-filters {
+            display: flex;
+            gap: 15px;
+            padding: 20px 30px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e0e0e0;
+            flex-wrap: wrap;
+            align-items: end;
+        }
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        .filter-group label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #555;
+        }
+        .filter-group input,
+        .filter-group select {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 0.95rem;
+        }
+        .player-search-container {
+            position: relative;
+        }
+        .player-autocomplete {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 1000;
+            display: none;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .player-autocomplete-item {
+            padding: 10px 12px;
+            cursor: pointer;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .player-autocomplete-item:hover {
+            background: #f8f9fa;
+        }
+        .player-autocomplete-item:last-child {
+            border-bottom: none;
+        }
+        .events-list {
+            padding: 20px 30px;
+        }
+        .event-card {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 15px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .event-card:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            transform: translateY(-2px);
+        }
+        .event-group-card {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            overflow: hidden;
+        }
+        .event-group-header {
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .event-group-header:hover {
+            background: #f8f9fa;
+        }
+        .event-group-header.expanded {
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .event-group-toggle {
+            font-size: 1.2rem;
+            color: #666;
+            transition: transform 0.2s;
+        }
+        .event-group-toggle.expanded {
+            transform: rotate(90deg);
+        }
+        .event-group-brackets {
+            display: none;
+            padding: 0 20px 20px 20px;
+        }
+        .event-group-brackets.expanded {
+            display: block;
+        }
+        .event-group-bracket-item {
+            padding: 12px 15px;
+            margin: 8px 0;
+            background: #f8f9fa;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border-left: 3px solid transparent;
+        }
+        .event-group-bracket-item:hover {
+            background: #e9ecef;
+            border-left-color: #667eea;
+        }
+        .event-group-badge {
+            background: #667eea;
+            color: white;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+        .event-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 10px;
+        }
+        .event-name {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 5px;
+        }
+        .event-type {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .event-type.open { background: #4CAF50; color: white; }
+        .event-type.regional { background: #2196F3; color: white; }
+        .event-type.national { background: #FF9800; color: white; }
+        .event-type.signature { background: #9C27B0; color: white; }
+        .event-details {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            color: #666;
+            font-size: 0.9rem;
+        }
+        .event-detail-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        .no-events {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+        .btn-back {
+            background: rgba(255,255,255,0.2);
+            color: white;
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-weight: 600;
+            display: inline-block;
+        }
+        .btn-back:hover {
+            background: rgba(255,255,255,0.3);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="events-header">
+            <div>
+                <h1>🎯 Events</h1>
+                <p style="margin: 5px 0 0 0; opacity: 0.9;">Browse tournaments, regionals, opens, and nationals</p>
+            </div>
+            <a href="/" class="btn-back">← Back to Players</a>
+        </div>
+
+        <div class="events-filters">
+            <div class="filter-group">
+                <label>Event Type</label>
+                <select id="eventTypeFilter">
+                    <option value="">All Types</option>
+                    <option value="open">Open</option>
+                    <option value="regional">Regional</option>
+                    <option value="national">National</option>
+                    <option value="signature">Signature</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>Season</label>
+                <select id="seasonFilter">
+                    <option value="">All Seasons</option>
+                    <option value="11">2025-2026</option>
+                    <option value="10">2024-2025</option>
+                    <option value="9">2023-2024</option>
+                    <option value="8">2022-2023</option>
+                </select>
+            </div>
+            <div class="filter-group player-search-container">
+                <label>Player</label>
+                <input type="text" id="playerSearch" placeholder="Search player...">
+                <div id="playerAutocomplete" class="player-autocomplete"></div>
+            </div>
+            <div class="filter-group">
+                <label>&nbsp;</label>
+                <button id="clearFilters" class="btn btn-secondary" style="padding: 8px 16px;">Clear</button>
+            </div>
+        </div>
+
+        <div class="events-list">
+            <div id="loading" class="loading" style="display: none;">Loading events...</div>
+            <div id="noEvents" class="no-events" style="display: none;">No events found</div>
+            <div id="eventsContainer"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api';
+        let currentPlayerId = null;
+        let searchTimeout = null;
+
+        // Load events on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            loadEvents();
+            
+            // Filter event listeners
+            document.getElementById('eventTypeFilter').addEventListener('change', loadEvents);
+            document.getElementById('seasonFilter').addEventListener('change', loadEvents);
+            document.getElementById('clearFilters').addEventListener('click', clearFilters);
+            
+            // Player search with autocomplete
+            const playerSearch = document.getElementById('playerSearch');
+            playerSearch.addEventListener('input', (e) => {
+                const query = e.target.value.trim();
+                if (query.length >= 2) {
+                    clearTimeout(searchTimeout);
+                    searchTimeout = setTimeout(() => searchPlayers(query), 300);
+                } else {
+                    currentPlayerId = null;
+                    document.getElementById('playerAutocomplete').style.display = 'none';
+                    loadEvents();
+                }
+            });
+            
+            // Close autocomplete when clicking outside
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('.player-search-container')) {
+                    document.getElementById('playerAutocomplete').style.display = 'none';
+                }
+            });
+        });
+
+        async function searchPlayers(query) {
+            try {
+                const response = await fetch(`${API_BASE}/players/search?q=${encodeURIComponent(query)}&limit=10`);
+                const data = await response.json();
+                
+                const autocomplete = document.getElementById('playerAutocomplete');
+                if (data.players && data.players.length > 0) {
+                    autocomplete.innerHTML = data.players.map(player => 
+                        `<div class="player-autocomplete-item" data-player-id="${player.player_id}">
+                            ${player.name}${player.state ? ` (${player.state})` : ''}
+                        </div>`
+                    ).join('');
+                    autocomplete.style.display = 'block';
+                    
+                    // Add click handlers
+                    autocomplete.querySelectorAll('.player-autocomplete-item').forEach(item => {
+                        item.addEventListener('click', () => {
+                            currentPlayerId = parseInt(item.dataset.playerId);
+                            document.getElementById('playerSearch').value = item.textContent.trim();
+                            autocomplete.style.display = 'none';
+                            loadEvents();
+                        });
+                    });
+                } else {
+                    autocomplete.innerHTML = '<div class="player-autocomplete-item">No players found</div>';
+                    autocomplete.style.display = 'block';
+                }
+            } catch (error) {
+                console.error('Error searching players:', error);
+            }
+        }
+
+        async function loadEvents() {
+            const eventType = document.getElementById('eventTypeFilter').value;
+            const bucketId = document.getElementById('seasonFilter').value;
+            const playerSearchInput = document.getElementById('playerSearch').value.trim();
+            
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('noEvents').style.display = 'none';
+            document.getElementById('eventsContainer').innerHTML = '';
+            
+            try {
+                const params = new URLSearchParams();
+                if (eventType) params.append('event_type', eventType);
+                if (bucketId) params.append('bucket_id', bucketId);
+                if (currentPlayerId) params.append('player_id', currentPlayerId);
+                else if (playerSearchInput && !currentPlayerId) {
+                    // If player name entered but not selected, search by name
+                    params.append('player_name', playerSearchInput);
+                }
+                params.append('limit', '100');
+                
+                const response = await fetch(`${API_BASE}/events?${params}`);
+                const data = await response.json();
+                
+                document.getElementById('loading').style.display = 'none';
+                
+                if (data.events && data.events.length > 0) {
+                    renderEvents(data.events);
+                    document.getElementById('noEvents').style.display = 'none';
+                } else {
+                    document.getElementById('noEvents').style.display = 'block';
+                    document.getElementById('noEvents').textContent = data.total === 0 
+                        ? 'No events found. Index events first from the admin page.' 
+                        : 'No events match your filters.';
+                }
+            } catch (error) {
+                console.error('Error loading events:', error);
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('noEvents').style.display = 'block';
+                document.getElementById('noEvents').textContent = 'Error loading events';
+            }
+        }
+
+        function renderEvents(events) {
+            const container = document.getElementById('eventsContainer');
+            container.innerHTML = events.map((event, idx) => {
+                const eventTypeClass = event.event_type || 'unknown';
+                const eventTypeLabel = event.event_type ? event.event_type.charAt(0).toUpperCase() + event.event_type.slice(1) : 'Unknown';
+                const eventDate = event.event_date ? new Date(event.event_date).toLocaleDateString() : 'TBD';
+                const location = [event.city, event.state].filter(Boolean).join(', ') || event.location || 'TBD';
+                
+                if (event.type === 'grouped') {
+                    // Grouped event with multiple brackets
+                    const groupId = `event-group-${idx}`;
+                    return `
+                        <div class="event-group-card">
+                            <div class="event-group-header" onclick="toggleEventGroup('${groupId}')" id="${groupId}-header">
+                                <div style="flex: 1;">
+                                    <div class="event-name">${event.display_name}</div>
+                                    <div style="color: #666; font-size: 0.9rem; margin-top: 5px;">
+                                        ${event.event_count} bracket${event.event_count > 1 ? 's' : ''}
+                                    </div>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 15px;">
+                                    <span class="event-group-badge">${event.event_count} Brackets</span>
+                                    <span class="event-type ${eventTypeClass}">${eventTypeLabel}</span>
+                                    <span class="event-group-toggle" id="${groupId}-toggle">▶</span>
+                                </div>
+                            </div>
+                            <div class="event-group-brackets" id="${groupId}-brackets">
+                                ${event.events.map(subEvent => {
+                                    const subEventDate = subEvent.event_date ? new Date(subEvent.event_date).toLocaleDateString() : 'TBD';
+                                    return `
+                                        <div class="event-group-bracket-item" onclick="window.location.href='/events/${subEvent.event_id}'">
+                                            <div style="font-weight: 600;">${subEvent.bracket_name || subEvent.event_name}</div>
+                                            <div style="color: #666; font-size: 0.85rem; margin-top: 4px;">📅 ${subEventDate}</div>
+                                        </div>
+                                    `;
+                                }).join('')}
+                                <div class="event-group-bracket-item" style="background: #667eea; color: white; font-weight: 600; border-left-color: #667eea;" onclick="window.location.href='/events/grouped?base=${encodeURIComponent(event.base_event_name)}&bracket=${encodeURIComponent(event.bracket_type)}'">
+                                    <div>📊 View Combined Stats (All Brackets)</div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    // Single event - combine base_event_name and bracket_name for clearer title
+                    let displayTitle = event.base_event_name || event.event_name;
+                    if (event.base_event_name && event.bracket_name) {
+                        // Combine: "Open #2 Winter Haven Tier 1 Singles"
+                        displayTitle = `${event.base_event_name} ${event.bracket_name}`;
+                    } else if (event.bracket_name) {
+                        // Fallback: use bracket_name if base_event_name is missing
+                        displayTitle = event.bracket_name;
+                    }
+                    
+                    return `
+                        <div class="event-card" onclick="window.location.href='/events/${event.event_id}'">
+                            <div class="event-header">
+                                <div>
+                                    <div class="event-name">${displayTitle}</div>
+                                </div>
+                                <span class="event-type ${eventTypeClass}">${eventTypeLabel}</span>
+                            </div>
+                            <div class="event-details">
+                                <div class="event-detail-item">📅 ${eventDate}</div>
+                                <div class="event-detail-item">📍 ${location}</div>
+                                ${event.event_number ? `<div class="event-detail-item">#${event.event_number}</div>` : ''}
+                            </div>
+                        </div>
+                    `;
+                }
+            }).join('');
+        }
+
+        function toggleEventGroup(groupId) {
+            const header = document.getElementById(`${groupId}-header`);
+            const brackets = document.getElementById(`${groupId}-brackets`);
+            const toggle = document.getElementById(`${groupId}-toggle`);
+            
+            const isExpanded = brackets.classList.contains('expanded');
+            
+            if (isExpanded) {
+                brackets.classList.remove('expanded');
+                header.classList.remove('expanded');
+                toggle.classList.remove('expanded');
+            } else {
+                brackets.classList.add('expanded');
+                header.classList.add('expanded');
+                toggle.classList.add('expanded');
+            }
+        }
+
+        function clearFilters() {
+            document.getElementById('eventTypeFilter').value = '';
+            document.getElementById('seasonFilter').value = '';
+            document.getElementById('playerSearch').value = '';
+            currentPlayerId = null;
+            loadEvents();
+        }
+    </script>
+</body>
+</html>
+

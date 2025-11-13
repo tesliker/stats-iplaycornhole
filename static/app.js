@@ -15,6 +15,51 @@ let isMultiSeasonMode = false;
 // Fields that should default to descending (higher is better)
 const descDefaultFields = ['pts_per_rnd', 'dpr', 'player_cpi', 'win_pct', 'overall_total', 'total_games', 'rounds_total'];
 
+// Column configuration: all available stats
+const columnConfig = {
+    rank: { label: 'Rank', field: 'rank', defaultVisible: true, sortable: true, formatter: (v) => v || 'N/A' },
+    name: { label: 'Name', field: null, defaultVisible: true, sortable: false, formatter: (p) => `<strong>${p.first_name} ${p.last_name}</strong>` },
+    state: { label: 'State', field: 'state', defaultVisible: true, sortable: false, formatter: (v) => v || 'N/A' },
+    skill: { label: 'Skill', field: 'skill_level', defaultVisible: true, sortable: false, formatter: (v) => v || 'N/A' },
+    pts_per_rnd: { label: 'PPR', field: 'pts_per_rnd', defaultVisible: true, sortable: true, formatter: formatNumber },
+    dpr: { label: 'DPR', field: 'dpr', defaultVisible: true, sortable: true, formatter: formatNumber },
+    player_cpi: { label: 'CPI', field: 'player_cpi', defaultVisible: true, sortable: true, formatter: formatNumber },
+    win_pct: { label: 'Win %', field: 'win_pct', defaultVisible: true, sortable: true, formatter: formatPercent },
+    total_games: { label: 'Games', field: 'total_games', defaultVisible: true, sortable: true, formatter: (v) => v || 0 },
+    rounds_total: { label: 'Rounds', field: 'rounds_total', defaultVisible: true, sortable: true, formatter: (v) => v || 0 },
+    overall_total: { label: 'Overall', field: 'overall_total', defaultVisible: true, sortable: true, formatter: formatNumber },
+    total_pts: { label: 'Total Pts', field: 'total_pts', defaultVisible: false, sortable: true, formatter: (v) => v || 0 },
+    opponent_pts_per_rnd: { label: 'Opp PPR', field: 'opponent_pts_per_rnd', defaultVisible: false, sortable: true, formatter: formatNumber },
+    opponent_pts_total: { label: 'Opp Pts Total', field: 'opponent_pts_total', defaultVisible: false, sortable: true, formatter: (v) => v || 0 },
+    four_bagger_pct: { label: '4-Bag %', field: 'four_bagger_pct', defaultVisible: false, sortable: true, formatter: formatPercent },
+    bags_in_pct: { label: 'Bags In %', field: 'bags_in_pct', defaultVisible: false, sortable: true, formatter: formatPercent },
+    bags_on_pct: { label: 'Bags On %', field: 'bags_on_pct', defaultVisible: false, sortable: true, formatter: formatPercent },
+    bags_off_pct: { label: 'Bags Off %', field: 'bags_off_pct', defaultVisible: false, sortable: true, formatter: formatPercent },
+    total_wins: { label: 'Wins', field: 'total_wins', defaultVisible: false, sortable: true, formatter: (v) => v || 0 },
+    total_losses: { label: 'Losses', field: 'total_losses', defaultVisible: false, sortable: true, formatter: (v) => v || 0 },
+    actions: { label: 'Actions', field: null, defaultVisible: true, sortable: false, formatter: (p) => `<button class="btn btn-small" onclick="showComparison(${p.player_id})">Compare Seasons</button>` }
+};
+
+// Column visibility state (loaded from localStorage or defaults)
+let visibleColumns = loadColumnPreferences();
+
+function loadColumnPreferences() {
+    const saved = localStorage.getItem('visibleColumns');
+    if (saved) {
+        try {
+            return JSON.parse(saved);
+        } catch (e) {
+            console.error('Error loading column preferences:', e);
+        }
+    }
+    // Default: all columns with defaultVisible: true
+    return Object.keys(columnConfig).filter(key => columnConfig[key].defaultVisible);
+}
+
+function saveColumnPreferences() {
+    localStorage.setItem('visibleColumns', JSON.stringify(visibleColumns));
+}
+
 function getDefaultSortOrder(field) {
     return descDefaultFields.includes(field) ? 'desc' : 'asc';
 }
@@ -22,12 +67,13 @@ function getDefaultSortOrder(field) {
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
     // Immediately populate seasons dropdown with defaults so it doesn't show "Loading..."
-    const defaultSeasons = [11, 10, 9, 8, 7];
+    const defaultSeasons = [11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0];
     populateSeasonDropdown(defaultSeasons);
     populateSeasonCheckboxes(defaultSeasons);
     
     initializeFilters(); // This will update with actual data from API if successful
     setupEventListeners();
+    setupColumnManager(); // Initialize column visibility system
     // Set initial sort to rank (ascending by default)
     currentSortBy = 'rank';
     currentSortOrder = 'asc';
@@ -37,24 +83,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function setupEventListeners() {
     // Remove fetch button - data is fetched automatically weekly
-    
-    // Add click handlers for sortable column headers
-    document.querySelectorAll('.sortable').forEach(header => {
-        header.addEventListener('click', () => {
-            const sortField = header.getAttribute('data-sort');
-            if (currentSortBy === sortField) {
-                // Toggle sort order if clicking same column
-                currentSortOrder = currentSortOrder === 'asc' ? 'desc' : 'asc';
-            } else {
-                // New column, use default sort order for that field
-                currentSortBy = sortField;
-                currentSortOrder = getDefaultSortOrder(sortField);
-            }
-            currentPage = 1;
-            updateSortIndicators();
-            loadPlayers();
-        });
-    });
+    // Sort handlers are now attached in updateTableHeaders() to support dynamic columns
     
     document.getElementById('bucketSelect').addEventListener('change', (e) => {
         if (!isMultiSeasonMode) {
@@ -162,7 +191,7 @@ async function loadFilterOptions() {
         } else {
             // Fallback: show error or use default seasons if API doesn't return available_seasons
             console.warn('No available_seasons in API response, using defaults');
-            const defaultSeasons = [11, 10, 9, 8, 7];
+            const defaultSeasons = [11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0];
             populateSeasonDropdown(defaultSeasons);
             populateSeasonCheckboxes(defaultSeasons);
         }
@@ -173,7 +202,7 @@ async function loadFilterOptions() {
             console.warn('Filter options request timed out');
         }
         // Fallback to default seasons if API call fails
-        const defaultSeasons = [11, 10, 9, 8, 7];
+        const defaultSeasons = [11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0];
         populateSeasonDropdown(defaultSeasons);
         populateSeasonCheckboxes(defaultSeasons);
     }
@@ -339,6 +368,10 @@ async function loadPlayers() {
         const skill = document.getElementById('skillFilter').value;
         if (skill) params.append('skill_level', skill);
         
+        // Region filter temporarily disabled
+        // const region = document.getElementById('regionFilter')?.value;
+        // if (region) params.append('region', region);
+        
         // Rebuild URL with updated params
         if (isMultiSeasonMode && selectedBucketIds.length > 1) {
             params = new URLSearchParams({
@@ -351,6 +384,8 @@ async function loadPlayers() {
             if (search) params.append('search', search);
             if (state) params.append('state', state);
             if (skill) params.append('skill_level', skill);
+            // Region filter temporarily disabled
+            // if (region) params.append('region', region);
             url = `${API_BASE}/players/multi-season?${params}`;
         } else {
             params = new URLSearchParams({
@@ -363,6 +398,8 @@ async function loadPlayers() {
             if (search) params.append('search', search);
             if (state) params.append('state', state);
             if (skill) params.append('skill_level', skill);
+            // Region filter temporarily disabled
+            // if (region) params.append('region', region);
             url = `${API_BASE}/players?${params}`;
         }
         
@@ -399,35 +436,211 @@ async function loadPlayers() {
     }
 }
 
+function setupColumnManager() {
+    updateTableHeaders();
+    updateAvailableStatsTags();
+}
+
+function updateTableHeaders() {
+    const thead = document.getElementById('tableHead');
+    thead.innerHTML = '<tr></tr>';
+    const headerRow = thead.querySelector('tr');
+    
+    // Separate actions from other columns to ensure it's always last (if present)
+    const otherColumns = visibleColumns.filter(key => key !== 'actions');
+    const hasActions = visibleColumns.includes('actions');
+    
+    // Render all columns except actions first
+    otherColumns.forEach(columnKey => {
+        const config = columnConfig[columnKey];
+        if (!config) return;
+        
+        const th = document.createElement('th');
+        th.className = config.sortable ? 'sortable' : '';
+        if (config.sortable) {
+            th.setAttribute('data-sort', config.field);
+        }
+        
+        // Create header content with X button for removable columns
+        const headerContent = document.createElement('span');
+        headerContent.className = 'header-content';
+        headerContent.textContent = config.label;
+        
+        // Add X button for all removable columns (all except 'name')
+        if (columnKey !== 'name') {
+            // Add X button for removable columns
+            const xButton = document.createElement('span');
+            xButton.className = 'remove-column-btn';
+            xButton.innerHTML = ' ×';
+            xButton.title = 'Remove column';
+            xButton.onclick = (e) => {
+                e.stopPropagation();
+                removeColumn(columnKey);
+            };
+            headerContent.appendChild(xButton);
+        }
+        
+        th.appendChild(headerContent);
+        if (config.sortable) {
+            const sortIndicator = document.createElement('span');
+            sortIndicator.className = 'sort-indicator';
+            th.appendChild(sortIndicator);
+        }
+        
+        headerRow.appendChild(th);
+    });
+    
+    // Always render actions last if it exists
+    if (hasActions) {
+        const config = columnConfig['actions'];
+        if (config) {
+            const th = document.createElement('th');
+            th.className = config.sortable ? 'sortable' : '';
+            if (config.sortable) {
+                th.setAttribute('data-sort', config.field);
+            }
+            
+            const headerContent = document.createElement('span');
+            headerContent.className = 'header-content';
+            headerContent.textContent = config.label;
+            
+            // Add X button for Actions column (all columns except 'name' are removable)
+            const xButton = document.createElement('span');
+            xButton.className = 'remove-column-btn';
+            xButton.innerHTML = ' ×';
+            xButton.title = 'Remove column';
+            xButton.onclick = (e) => {
+                e.stopPropagation();
+                removeColumn('actions');
+            };
+            headerContent.appendChild(xButton);
+            
+            th.appendChild(headerContent);
+            if (config.sortable) {
+                const sortIndicator = document.createElement('span');
+                sortIndicator.className = 'sort-indicator';
+                th.appendChild(sortIndicator);
+            }
+            
+            headerRow.appendChild(th);
+        }
+    }
+    
+    // Re-attach sort handlers
+    document.querySelectorAll('.sortable').forEach(header => {
+        header.addEventListener('click', () => {
+            const sortField = header.getAttribute('data-sort');
+            if (currentSortBy === sortField) {
+                currentSortOrder = currentSortOrder === 'asc' ? 'desc' : 'asc';
+            } else {
+                currentSortBy = sortField;
+                currentSortOrder = getDefaultSortOrder(sortField);
+            }
+            currentPage = 1;
+            updateSortIndicators();
+            loadPlayers();
+        });
+    });
+}
+
+function updateAvailableStatsTags() {
+    const container = document.getElementById('availableStatsTags');
+    const tagsList = document.getElementById('statsTagsList');
+    tagsList.innerHTML = '';
+    
+    // Get all columns that are NOT visible
+    const hiddenColumns = Object.keys(columnConfig).filter(key => 
+        !visibleColumns.includes(key) && key !== 'name'
+    );
+    
+    if (hiddenColumns.length === 0) {
+        container.style.display = 'none';
+        return;
+    }
+    
+    container.style.display = 'block';
+    
+    hiddenColumns.forEach(columnKey => {
+        const config = columnConfig[columnKey];
+        const tag = document.createElement('button');
+        tag.className = 'stats-tag';
+        tag.textContent = config.label;
+        tag.onclick = () => addColumn(columnKey);
+        tagsList.appendChild(tag);
+    });
+}
+
+function removeColumn(columnKey) {
+    if (visibleColumns.length <= 1) {
+        alert('You must keep at least one column visible.');
+        return;
+    }
+    visibleColumns = visibleColumns.filter(key => key !== columnKey);
+    saveColumnPreferences();
+    updateTableHeaders();
+    updateAvailableStatsTags();
+    loadPlayers(); // Reload to update table
+}
+
+function addColumn(columnKey) {
+    if (!visibleColumns.includes(columnKey)) {
+        // Insert before 'actions' if it exists, otherwise just push to end
+        const actionsIndex = visibleColumns.indexOf('actions');
+        if (actionsIndex !== -1) {
+            visibleColumns.splice(actionsIndex, 0, columnKey);
+        } else {
+            visibleColumns.push(columnKey);
+        }
+        saveColumnPreferences();
+        updateTableHeaders();
+        updateAvailableStatsTags();
+        loadPlayers(); // Reload to update table
+    }
+}
+
 function displayPlayers(players, isMultiSeason = false) {
     const tbody = document.getElementById('playersBody');
     tbody.innerHTML = '';
     
     if (players.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="12" style="text-align: center; padding: 40px;">No players found. Try fetching data first.</td></tr>';
+        const colspan = visibleColumns.length;
+        tbody.innerHTML = `<tr><td colspan="${colspan}" style="text-align: center; padding: 40px;">No players found. Try fetching data first.</td></tr>`;
         return;
     }
     
+    // Separate actions from other columns to ensure it's always last
+    const otherColumns = visibleColumns.filter(key => key !== 'actions');
+    const hasActions = visibleColumns.includes('actions');
+    
     players.forEach(player => {
         const row = document.createElement('tr');
-        row.innerHTML = `
-            <td>${player.rank || 'N/A'}</td>
-            <td><strong>${player.first_name} ${player.last_name}</strong></td>
-            <td>${player.state || 'N/A'}</td>
-            <td>${player.skill_level || 'N/A'}</td>
-            <td>${formatNumber(player.pts_per_rnd)}</td>
-            <td>${formatNumber(player.dpr)}</td>
-            <td>${formatNumber(player.player_cpi)}</td>
-            <td>${formatPercent(player.win_pct)}</td>
-            <td>${player.total_games || 0}</td>
-            <td>${player.rounds_total || 0}</td>
-            <td>${formatNumber(player.overall_total)}</td>
-            <td>
-                <button class="btn btn-small" onclick="showComparison(${player.player_id})">
-                    Compare Seasons
-                </button>
-            </td>
-        `;
+        
+        // Render all columns except actions
+        otherColumns.forEach(columnKey => {
+            const config = columnConfig[columnKey];
+            if (!config) return;
+            
+            const td = document.createElement('td');
+            if (config.field === null) {
+                // Special handling for name
+                td.innerHTML = config.formatter(player);
+            } else {
+                const value = player[config.field];
+                td.innerHTML = config.formatter(value);
+            }
+            row.appendChild(td);
+        });
+        
+        // Always render actions last if it exists
+        if (hasActions) {
+            const config = columnConfig['actions'];
+            if (config) {
+                const td = document.createElement('td');
+                td.innerHTML = config.formatter(player);
+                row.appendChild(td);
+            }
+        }
+        
         tbody.appendChild(row);
     });
 }

@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Games - Bag Stats</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <style>
+        .games-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+        .games-header h1 {
+            margin: 0;
+            font-size: 2rem;
+        }
+        .games-filters {
+            display: flex;
+            gap: 15px;
+            padding: 20px 30px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e0e0e0;
+            flex-wrap: wrap;
+            align-items: end;
+        }
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        .filter-group label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #555;
+        }
+        .filter-group input,
+        .filter-group select {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 0.95rem;
+        }
+        .games-list {
+            padding: 20px 30px;
+        }
+        .game-card {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 15px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .game-card:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            transform: translateY(-2px);
+        }
+        .game-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .game-players {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        .player-vs {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #666;
+        }
+        .player-name {
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+        .player-name.winner {
+            color: #28a745;
+        }
+        .player-name.loser {
+            color: #dc3545;
+        }
+        .game-score {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #333;
+        }
+        .game-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #f0f0f0;
+        }
+        .stat-item {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        .stat-label {
+            font-size: 0.85rem;
+            color: #666;
+            font-weight: 600;
+        }
+        .stat-value {
+            font-size: 1rem;
+            color: #333;
+        }
+        .game-event {
+            font-size: 0.9rem;
+            color: #666;
+            margin-top: 10px;
+        }
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            padding: 20px;
+            background: #f8f9fa;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        .error {
+            text-align: center;
+            padding: 20px;
+            color: #dc3545;
+            background: #f8d7da;
+            border-radius: 6px;
+            margin: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="games-header">
+            <div>
+                <h1>🎯 Games</h1>
+                <p style="margin: 5px 0 0 0; opacity: 0.9;">Browse all indexed games</p>
+            </div>
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <a href="/" class="btn" style="background: rgba(255,255,255,0.2); color: white; text-decoration: none; padding: 8px 16px; border-radius: 6px; font-weight: 600;">🏠 Home</a>
+                <a href="/events" class="btn" style="background: rgba(255,255,255,0.2); color: white; text-decoration: none; padding: 8px 16px; border-radius: 6px; font-weight: 600;">📅 Events</a>
+                <a href="/head-to-head" class="btn" style="background: rgba(255,255,255,0.2); color: white; text-decoration: none; padding: 8px 16px; border-radius: 6px; font-weight: 600;">⚔️ Head-to-Head</a>
+            </div>
+        </div>
+
+        <div class="games-filters">
+            <div class="filter-group">
+                <label for="player1Search">Player 1:</label>
+                <input type="text" id="player1Search" placeholder="Search player...">
+                <input type="hidden" id="player1Id">
+            </div>
+            <div class="filter-group">
+                <label for="player2Search">Player 2:</label>
+                <input type="text" id="player2Search" placeholder="Search player...">
+                <input type="hidden" id="player2Id">
+            </div>
+            <div class="filter-group">
+                <label for="eventIdFilter">Event ID:</label>
+                <input type="number" id="eventIdFilter" placeholder="Filter by event...">
+            </div>
+            <div class="filter-group">
+                <label for="pageSize">Page Size:</label>
+                <select id="pageSize">
+                    <option value="25">25</option>
+                    <option value="50" selected>50</option>
+                    <option value="100">100</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="sortBy">Sort By:</label>
+                <select id="sortBy">
+                    <option value="date" selected>Most Recent</option>
+                    <option value="rounds">Most Rounds</option>
+                    <option value="cpi">Highest CPI Players</option>
+                </select>
+            </div>
+            <div class="filter-group" style="justify-content: flex-end;">
+                <button class="btn btn-secondary" onclick="clearFilters()">Clear</button>
+                <button class="btn" onclick="loadGames()">Search</button>
+            </div>
+        </div>
+
+        <div id="loading" class="loading" style="display: none;">Loading games...</div>
+        <div id="error" class="error" style="display: none;"></div>
+
+        <div class="games-list" id="gamesList">
+            <!-- Games will be loaded here -->
+        </div>
+
+        <div class="pagination" id="pagination" style="display: none;">
+            <button class="btn btn-secondary" id="prevPage" onclick="previousPage()">Previous</button>
+            <span id="pageInfo">Page 1 of 1</span>
+            <button class="btn btn-secondary" id="nextPage" onclick="nextPage()">Next</button>
+        </div>
+    </div>
+
+    <script src="/static/games.js"></script>
+</body>
+</html>
+

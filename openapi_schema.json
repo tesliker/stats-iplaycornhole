@@ -1,0 +1,136 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Cornhole Statistics API",
+    "description": "API for querying cornhole player statistics",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://fly-cornhole.fly.dev",
+      "description": "Production server"
+    }
+  ],
+  "paths": {
+    "/mcp/call": {
+      "post": {
+        "summary": "Call an MCP tool to query cornhole statistics",
+        "description": "Execute a tool to get player stats, rankings, or comparisons. Available tools: get_player_stats, search_players, get_top_players, compare_player_seasons, get_player_rankings, get_filter_options",
+        "operationId": "callTool",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "enum": [
+                      "get_player_stats",
+                      "search_players",
+                      "get_top_players",
+                      "compare_player_seasons",
+                      "get_player_rankings",
+                      "get_filter_options"
+                    ],
+                    "description": "The tool to call"
+                  },
+                  "arguments": {
+                    "type": "object",
+                    "description": "Arguments for the tool (varies by tool)",
+                    "properties": {},
+                    "additionalProperties": true
+                  }
+                },
+                "required": ["name"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Tool response with statistics data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "content": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "description": "Content type"
+                          },
+                          "text": {
+                            "type": "string",
+                            "description": "Response text content"
+                          }
+                        },
+                        "required": ["type", "text"]
+                      },
+                      "description": "Array of content items"
+                    },
+                    "isError": {
+                      "type": "boolean",
+                      "description": "Whether the response is an error"
+                    },
+                    "error": {
+                      "type": "object",
+                      "description": "Error information if isError is true",
+                      "properties": {
+                        "code": {
+                          "type": "integer"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "required": ["content"]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "detail": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "detail": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+
+

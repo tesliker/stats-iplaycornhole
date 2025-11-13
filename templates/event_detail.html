@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Event Details - Bag Stats</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <style>
+        .event-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+        }
+        .event-header h1 {
+            margin: 0 0 10px 0;
+            font-size: 2rem;
+        }
+        .event-header-info {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            margin-top: 15px;
+            opacity: 0.95;
+            font-size: 0.95rem;
+        }
+        .event-header-info span {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .event-type-badge {
+            display: inline-block;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            margin-left: 10px;
+        }
+        .event-type-badge.open { background: rgba(255,255,255,0.3); }
+        .event-type-badge.regional { background: rgba(255,255,255,0.3); }
+        .event-type-badge.national { background: rgba(255,255,255,0.3); }
+        .event-type-badge.signature { background: rgba(255,255,255,0.3); }
+        .stats-container {
+            padding: 20px 30px;
+        }
+        .stats-controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .stats-source-selector {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 15px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .stats-source-selector label {
+            font-weight: 600;
+            color: #555;
+        }
+        .stats-source-selector select {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 0.95rem;
+            cursor: pointer;
+            background: white;
+            min-width: 250px;
+        }
+        .stats-source-selector select:hover {
+            border-color: #667eea;
+        }
+        .stats-tags-container {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        .stats-tags-label {
+            font-weight: 600;
+            margin-right: 10px;
+            color: #555;
+        }
+        .stats-tags-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        .stat-tag {
+            padding: 6px 12px;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 16px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+            user-select: none;
+            pointer-events: auto;
+            display: inline-block;
+        }
+        .stat-tag:hover {
+            background: #f0f0f0;
+        }
+        .stat-tag.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        thead {
+            background: #667eea;
+            color: white;
+        }
+        th {
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            cursor: pointer;
+            user-select: none;
+        }
+        th:hover {
+            background: #5568d3;
+        }
+        th.sortable::after {
+            content: ' ↕';
+            opacity: 0.5;
+            font-size: 0.8em;
+        }
+        th.sort-asc::after {
+            content: ' ↑';
+            opacity: 1;
+        }
+        th.sort-desc::after {
+            content: ' ↓';
+            opacity: 1;
+        }
+        td {
+            padding: 12px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        tbody tr:hover {
+            background: #f8f9fa;
+        }
+        tbody tr:last-child td {
+            border-bottom: none;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+            font-size: 1.1rem;
+        }
+        .loading::after {
+            content: '...';
+            animation: dots 1.5s steps(4, end) infinite;
+        }
+        @keyframes dots {
+            0%, 20% { content: '.'; }
+            40% { content: '..'; }
+            60%, 100% { content: '...'; }
+        }
+        .btn-back {
+            background: rgba(255,255,255,0.2);
+            color: white;
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-weight: 600;
+            display: inline-block;
+            margin-bottom: 15px;
+        }
+        .btn-back:hover {
+            background: rgba(255,255,255,0.3);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="event-header">
+            <a href="/events" class="btn-back">← Back to Events</a>
+            <div id="eventInfo" class="loading">Loading event...</div>
+        </div>
+
+        <div class="stats-container">
+            <div id="loading" class="loading" style="display: none;">Loading player stats...</div>
+            
+            <!-- Stats source selector removed - always use cached stats from API -->
+            
+            <div id="bracketFilters" style="display: none; margin-bottom: 20px;">
+                <div class="stats-tags-container">
+                    <span class="stats-tags-label">Filter by Bracket:</span>
+                    <div id="bracketFiltersList" class="stats-tags-list"></div>
+                </div>
+            </div>
+            
+            <div id="statsControls" style="display: none;">
+                <div class="stats-tags-container">
+                    <span class="stats-tags-label">Available Stats:</span>
+                    <div id="statsTagsList" class="stats-tags-list"></div>
+                </div>
+                
+                <div class="stats-controls">
+                    <button id="selectAllStats" class="btn btn-secondary">Select All</button>
+                    <button id="deselectAllStats" class="btn btn-secondary">Deselect All</button>
+                </div>
+                
+                <div style="overflow-x: auto;">
+                    <table id="statsTable">
+                        <thead id="statsTableHead"></thead>
+                        <tbody id="statsTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api';
+        const isGroupedEvent = window.location.pathname.includes('/events/grouped');
+        const urlParams = new URLSearchParams(window.location.search);
+        const baseEventName = urlParams.get('base');
+        const bracketType = urlParams.get('bracket');
+        
+        // Column configuration (same as homepage)
+        const columnConfig = {
+            rank: { label: isGroupedEvent ? 'Overall Rank' : 'Rank', field: 'rank', defaultVisible: true, sortable: true, formatter: (v) => v || 'N/A' },
+            name: { label: 'Name', field: null, defaultVisible: true, sortable: false, formatter: (p) => `<strong>${p.first_name} ${p.last_name}</strong>` },
+            pts_per_rnd: { label: 'PPR', field: 'pts_per_rnd', defaultVisible: true, sortable: true, formatter: formatNumber },
+            dpr: { label: 'DPR', field: 'dpr', defaultVisible: true, sortable: true, formatter: formatNumber },
+            player_cpi: { label: 'CPI', field: 'player_cpi', defaultVisible: true, sortable: true, formatter: formatNumber },
+            win_pct: { label: 'Win %', field: 'win_pct', defaultVisible: true, sortable: true, formatter: formatPercent },
+            total_games: { label: 'Games', field: 'games_played', defaultVisible: true, sortable: true, formatter: (v) => v || 0 },
+            rounds_total: { label: 'Rounds (Total)', field: 'rounds_total', defaultVisible: true, sortable: true, formatter: (v) => v || 0 },
+            rounds_avg: { label: 'Rounds (Avg/Game)', field: 'rounds_avg', defaultVisible: false, sortable: true, formatter: formatNumber },
+            total_pts: { label: 'Total Pts', field: 'total_pts', defaultVisible: false, sortable: true, formatter: formatNumber },
+            opponent_pts_per_rnd: { label: 'Opp PPR', field: 'opponent_pts_per_rnd', defaultVisible: false, sortable: true, formatter: formatNumber },
+            opponent_pts_total: { label: 'Opp Total', field: 'opponent_pts_total', defaultVisible: false, sortable: true, formatter: formatNumber },
+            four_bagger_pct: { label: '4-Bag %', field: 'four_bagger_pct', defaultVisible: false, sortable: true, formatter: formatPercent },
+            bags_in_pct: { label: 'Bags In %', field: 'bags_in_pct', defaultVisible: false, sortable: true, formatter: formatPercent },
+            bags_on_pct: { label: 'Bags On %', field: 'bags_on_pct', defaultVisible: false, sortable: true, formatter: formatPercent },
+            bags_off_pct: { label: 'Bags Off %', field: 'bags_off_pct', defaultVisible: false, sortable: true, formatter: formatPercent },
+        };
+        
+        let currentSortBy = 'rank';
+        let currentSortOrder = 'asc';
+        let playerStats = [];
+        let gameStats = [];
+        let currentStatsSource = 'games'; // Default to game stats
+        let visibleColumns = Object.keys(columnConfig).filter(key => columnConfig[key].defaultVisible);
+        let brackets = []; // Store bracket list for grouped events
+        let selectedBracketId = null; // null = all brackets
+
+        const descDefaultFields = ['pts_per_rnd', 'dpr', 'player_cpi', 'win_pct', 'total_games', 'rounds_total', 'total_pts', 'ppr'];
+
+        function formatNumber(val) {
+            if (val === null || val === undefined) return 'N/A';
+            return parseFloat(val).toFixed(2);
+        }
+
+        function formatPercent(val) {
+            if (val === null || val === undefined) return 'N/A';
+            return (parseFloat(val) * 100).toFixed(1) + '%';
+        }
+
+        window.addEventListener('DOMContentLoaded', async () => {
+            await loadEventDetails();
+            setupStatsControls();
+        });
+
+        async function loadEventDetails() {
+            try {
+                if (isGroupedEvent) {
+                    // Load grouped event stats
+                    if (!baseEventName || !bracketType) {
+                        throw new Error('Missing base or bracket parameters');
+                    }
+                    
+                    // Build URL with optional bracket_id filter
+                    let url = `${API_BASE}/events/grouped?base=${encodeURIComponent(baseEventName)}&bracket=${encodeURIComponent(bracketType)}`;
+                    if (selectedBracketId !== null) {
+                        url += `&bracket_id=${selectedBracketId}`;
+                    }
+                    
+                    const groupedResponse = await fetch(url);
+                    if (!groupedResponse.ok) {
+                        throw new Error(`HTTP ${groupedResponse.status}: ${groupedResponse.statusText}`);
+                    }
+                    const groupedData = await groupedResponse.json();
+                    
+                    if (groupedData.detail) {
+                        throw new Error(groupedData.detail);
+                    }
+                    
+                    // Render grouped event header
+                    const bracketName = selectedBracketId !== null 
+                        ? brackets.find(b => b.event_id === selectedBracketId)?.display_name || brackets.find(b => b.event_id === selectedBracketId)?.bracket_name || ''
+                        : '';
+                    const headerTitle = selectedBracketId !== null 
+                        ? `${groupedData.base_event_name} ${bracketName}`
+                        : `${groupedData.base_event_name} ${groupedData.bracket_type}`;
+                    const headerSubtitle = selectedBracketId !== null
+                        ? 'Bracket Stats'
+                        : `Combined Stats (${groupedData.events.length} bracket${groupedData.events.length > 1 ? 's' : ''})`;
+                    
+                    document.getElementById('eventInfo').innerHTML = `
+                        <h1>${headerTitle}</h1>
+                        <div style="opacity: 0.9; margin-bottom: 10px;">${headerSubtitle}</div>
+                        <span class="event-type-badge open">Open</span>
+                        <div class="event-header-info">
+                            <span id="totalPlayersSpan">📊 ${groupedData.total_players} Players</span>
+                            <span>🎮 ${groupedData.total_games} Games</span>
+                        </div>
+                    `;
+                    
+                    // Use grouped stats directly
+                    gameStats = groupedData.player_stats || [];
+                    playerStats = []; // No event stats for grouped events
+                    brackets = groupedData.brackets || groupedData.events || [];
+                    console.log('Loaded brackets:', brackets);
+                    
+                    // Hide stats source selector for grouped events
+                    const statsSourceSelector = document.querySelector('.stats-source-selector');
+                    if (statsSourceSelector) {
+                        statsSourceSelector.style.display = 'none';
+                    }
+                    
+                    currentStatsSource = 'games';
+                    
+                    // Render bracket filters
+                    console.log('About to render bracket filters, brackets count:', brackets.length);
+                    renderBracketFilters();
+                    
+                    // Render stats table
+                    renderStatsTable();
+                    setupStatsControls();
+                } else {
+                    // Regular single event loading - use cached stats like grouped events
+                    const eventId = window.location.pathname.split('/').pop();
+                    
+                    // Fetch event details (which now returns cached stats)
+                    const eventResponse = await fetch(`${API_BASE}/events/${eventId}`);
+                    if (!eventResponse.ok) {
+                        throw new Error(`HTTP ${eventResponse.status}: ${eventResponse.statusText}`);
+                    }
+                    const eventData = await eventResponse.json();
+                    
+                    if (eventData.detail) {
+                        throw new Error(eventData.detail);
+                    }
+                    
+                    const event = eventData.event;
+                    const eventTypeClass = event.event_type || 'unknown';
+                    const eventTypeLabel = event.event_type ? event.event_type.charAt(0).toUpperCase() + event.event_type.slice(1) : 'Unknown';
+                    const eventDate = event.event_date ? new Date(event.event_date).toLocaleDateString() : 'TBD';
+                    const location = [event.city, event.state].filter(Boolean).join(', ') || event.location || 'TBD';
+                    
+                    document.getElementById('eventInfo').innerHTML = `
+                        <h1>${event.base_event_name || event.event_name}</h1>
+                        ${event.bracket_name ? `<div style="opacity: 0.9; margin-bottom: 10px;">${event.bracket_name}</div>` : ''}
+                        <span class="event-type-badge ${eventTypeClass}">${eventTypeLabel}</span>
+                        <div class="event-header-info">
+                            <span>📅 ${eventDate}</span>
+                            <span>📍 ${location}</span>
+                            <span id="totalPlayersSpan">📊 ${eventData.total_players || 0} Players</span>
+                            ${event.season ? `<span>🏆 ${event.season}</span>` : ''}
+                        </div>
+                    `;
+                    
+                    // Use cached stats directly (same format as grouped events)
+                    gameStats = eventData.player_stats || [];
+                    playerStats = []; // No separate event stats for individual events
+                    
+                    // Hide stats source selector for individual events
+                    const statsSourceSelector = document.querySelector('.stats-source-selector');
+                    if (statsSourceSelector) {
+                        statsSourceSelector.style.display = 'none';
+                    }
+                    
+                    // Always use game stats (which are cached)
+                    currentStatsSource = 'games';
+                    
+                    // Render stats table
+                    renderStatsTable();
+                    setupStatsControls();
+                }
+            } catch (error) {
+                console.error('Error loading event details:', error);
+                document.getElementById('eventInfo').innerHTML = `<div style="color: #ff6b6b;">Error loading event details: ${error.message}</div>`;
+            }
+        }
+
+        function renderBracketFilters() {
+            console.log('renderBracketFilters called', { isGroupedEvent, brackets: brackets.length, selectedBracketId });
+            if (!isGroupedEvent || brackets.length === 0) {
+                document.getElementById('bracketFilters').style.display = 'none';
+                return;
+            }
+            
+            const filtersList = document.getElementById('bracketFiltersList');
+            if (!filtersList) {
+                console.error('bracketFiltersList element not found');
+                return;
+            }
+            filtersList.innerHTML = '';
+            
+            // Add "All Brackets" button
+            const allButton = document.createElement('span');
+            allButton.className = `stat-tag ${selectedBracketId === null ? 'active' : ''}`;
+            allButton.setAttribute('data-bracket-id', 'all');
+            allButton.textContent = 'All Brackets';
+            allButton.style.cursor = 'pointer';
+            allButton.addEventListener('click', (e) => {
+                console.log('All Brackets clicked');
+                e.preventDefault();
+                e.stopPropagation();
+                filterByBracket(null);
+            });
+            filtersList.appendChild(allButton);
+            
+            // Add individual bracket buttons
+            brackets.forEach(bracket => {
+                const button = document.createElement('span');
+                button.className = `stat-tag ${selectedBracketId === bracket.event_id ? 'active' : ''}`;
+                button.setAttribute('data-bracket-id', bracket.event_id);
+                button.textContent = bracket.display_name || bracket.bracket_name || bracket.event_name;
+                button.style.cursor = 'pointer';
+                button.addEventListener('click', (e) => {
+                    console.log('Bracket clicked:', bracket.event_id, bracket);
+                    e.preventDefault();
+                    e.stopPropagation();
+                    filterByBracket(bracket.event_id);
+                });
+                filtersList.appendChild(button);
+            });
+            
+            document.getElementById('bracketFilters').style.display = 'block';
+            console.log('Bracket filters rendered, buttons:', filtersList.children.length);
+        }
+        
+        async function filterByBracket(bracketId) {
+            console.log('filterByBracket called with:', bracketId);
+            try {
+                // Show loading state
+                const loadingDiv = document.getElementById('loading');
+                if (loadingDiv) {
+                    loadingDiv.style.display = 'block';
+                    loadingDiv.textContent = 'Loading bracket data...';
+                }
+                
+                // Disable bracket filter buttons during loading
+                const filterButtons = document.querySelectorAll('#bracketFiltersList .stat-tag');
+                filterButtons.forEach(btn => {
+                    btn.style.pointerEvents = 'none';
+                    btn.style.opacity = '0.6';
+                });
+                
+                selectedBracketId = bracketId;
+                renderBracketFilters();
+                
+                // Reload data with bracket filter to get bracket-specific rankings
+                if (isGroupedEvent) {
+                    console.log('Reloading event details for grouped event...');
+                    await loadEventDetails();
+                } else {
+                    renderStatsTable();
+                }
+            } catch (error) {
+                console.error('Error in filterByBracket:', error);
+                const loadingDiv = document.getElementById('loading');
+                if (loadingDiv) {
+                    loadingDiv.textContent = `Error: ${error.message}`;
+                }
+            } finally {
+                // Hide loading state and re-enable buttons
+                const loadingDiv = document.getElementById('loading');
+                if (loadingDiv) {
+                    loadingDiv.style.display = 'none';
+                }
+                
+                const filterButtons = document.querySelectorAll('#bracketFiltersList .stat-tag');
+                filterButtons.forEach(btn => {
+                    btn.style.pointerEvents = 'auto';
+                    btn.style.opacity = '1';
+                });
+            }
+        }
+        
+        window.filterByBracket = filterByBracket;
+
+        function setupStatsControls() {
+            // Create stat tags
+            const tagsList = document.getElementById('statsTagsList');
+            tagsList.innerHTML = Object.keys(columnConfig).map(key => {
+                const config = columnConfig[key];
+                const isVisible = visibleColumns.includes(key);
+                return `
+                    <span class="stat-tag ${isVisible ? 'active' : ''}" 
+                          data-stat="${key}" 
+                          onclick="toggleStat('${key}')">
+                        ${config.label}
+                    </span>
+                `;
+            }).join('');
+            
+            // Select/Deselect all buttons
+            document.getElementById('selectAllStats').addEventListener('click', () => {
+                visibleColumns = Object.keys(columnConfig);
+                setupStatsControls();
+                renderStatsTable();
+            });
+            
+            document.getElementById('deselectAllStats').addEventListener('click', () => {
+                visibleColumns = ['rank', 'name'];
+                setupStatsControls();
+                renderStatsTable();
+            });
+        }
+
+        function toggleStat(statKey) {
+            if (visibleColumns.includes(statKey)) {
+                if (visibleColumns.length > 2) { // Keep at least rank and name
+                    visibleColumns = visibleColumns.filter(s => s !== statKey);
+                }
+            } else {
+                visibleColumns.push(statKey);
+            }
+            setupStatsControls();
+            renderStatsTable();
+        }
+
+        function renderStatsTable() {
+            const thead = document.getElementById('statsTableHead');
+            const tbody = document.getElementById('statsTableBody');
+            
+            // Build header
+            thead.innerHTML = visibleColumns.map(key => {
+                const config = columnConfig[key];
+                const sortClass = config.sortable ? 'sortable' : '';
+                const sortIndicator = config.sortable && currentSortBy === key 
+                    ? (currentSortOrder === 'asc' ? 'sort-asc' : 'sort-desc')
+                    : '';
+                const clickHandler = config.sortable ? `onclick="sortTable('${key}')"` : '';
+                return `<th class="${sortClass} ${sortIndicator}" ${clickHandler}>${config.label}</th>`;
+            }).join('');
+            
+            // Use appropriate stats source
+            let statsToUse = currentStatsSource === 'games' ? gameStats : playerStats;
+            
+            // Filter by bracket if selected (for grouped events)
+            if (isGroupedEvent && selectedBracketId !== null) {
+                statsToUse = statsToUse.filter(player => {
+                    // Check if player participated in the selected bracket
+                    return player.event_ids && player.event_ids.includes(selectedBracketId);
+                });
+            }
+            
+            if (!statsToUse || statsToUse.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="${visibleColumns.length}" style="text-align: center; padding: 40px; color: #666;">${selectedBracketId !== null ? 'No players found in selected bracket' : 'No stats available for selected source'}</td></tr>`;
+                return;
+            }
+            
+            // Map fields for sorting based on source
+            const getSortValue = (player, sortField) => {
+                if (sortField === 'name') return null;
+                if (!columnConfig[sortField]?.field) return null;
+                
+                const field = columnConfig[sortField].field;
+                if (currentStatsSource === 'games' || isGroupedEvent) {
+                    const fieldMap = {
+                        'rank': 'overall_rank',  // Always use overall_rank for cached stats (both grouped and individual)
+                        'pts_per_rnd': 'ppr',
+                        'dpr': 'dpr',
+                        'win_pct': 'win_pct',
+                        'total_games': 'games_played',
+                        'rounds_total': 'rounds_total',
+                        'rounds_avg': 'rounds_avg',
+                        'total_pts': 'points',
+                        'opponent_pts_per_rnd': 'opponent_ppr',
+                        'opponent_pts_total': 'opponent_points',
+                        'four_bagger_pct': 'four_bagger_pct',
+                        'bags_in_pct': 'bags_in_pct',
+                        'bags_on_pct': 'bags_on_pct',
+                        'bags_off_pct': 'bags_off_pct',
+                    };
+                    const mappedField = fieldMap[field] || field;
+                    const value = player[mappedField];
+                    // Handle tie ranks like "T-3" or "T-2nd in bracket" - extract numeric part for sorting
+                    if (field === 'rank' && typeof value === 'string') {
+                        if (value.startsWith('T-')) {
+                            // Try to parse "T-3" format
+                            const numMatch = value.match(/T-(\d+)/);
+                            if (numMatch) {
+                                return parseInt(numMatch[1]) || 999;
+                            }
+                            // Handle "T-2nd in bracket" format
+                            if (value.includes('2nd in bracket')) {
+                                return 4; // Treat as T-4th
+                            }
+                        }
+                        // Handle numeric ranks like "1" or "2"
+                        const numValue = parseInt(value);
+                        if (!isNaN(numValue)) {
+                            return numValue;
+                        }
+                    }
+                    return value;
+                } else {
+                    return player[field];
+                }
+            };
+            
+            // Sort data
+            const sortedStats = [...statsToUse].sort((a, b) => {
+                const valA = getSortValue(a, currentSortBy);
+                const valB = getSortValue(b, currentSortBy);
+                
+                if (valA === null || valA === undefined) return 1;
+                if (valB === null || valB === undefined) return -1;
+                
+                const comparison = parseFloat(valA) - parseFloat(valB);
+                return currentSortOrder === 'asc' ? comparison : -comparison;
+            });
+            
+            // Build body - need to map fields based on source
+            tbody.innerHTML = sortedStats.map(player => {
+                return `<tr>${visibleColumns.map(key => {
+                    const config = columnConfig[key];
+                    let value;
+                    
+                    if (key === 'name') {
+                        // Handle name differently for game stats vs event stats
+                        if (currentStatsSource === 'games' || isGroupedEvent) {
+                            if (isGroupedEvent && player.player_name) {
+                                // Grouped events use player_name directly
+                                value = { first_name: player.player_name?.split(' ')[0] || '', last_name: player.player_name?.split(' ').slice(1).join(' ') || '' };
+                            } else if (player.player_name) {
+                                value = { first_name: player.player_name?.split(' ')[0] || '', last_name: player.player_name?.split(' ').slice(1).join(' ') || '' };
+                            } else {
+                                value = player;
+                            }
+                        } else {
+                            value = player;
+                        }
+                    } else if (config.field) {
+                        // Map game stats fields to event stats fields
+                        if (currentStatsSource === 'games' || isGroupedEvent) {
+                            const fieldMap = {
+                                'rank': 'overall_rank',  // Always use overall_rank for cached stats (both grouped and individual)
+                                'pts_per_rnd': 'ppr',
+                                'dpr': 'dpr',
+                                'player_cpi': 'player_cpi',
+                                'win_pct': 'win_pct',
+                                'total_games': 'games_played',
+                                'rounds_total': 'rounds_total',
+                                'rounds_avg': 'rounds_avg',
+                                'total_pts': 'points',
+                                'opponent_pts_per_rnd': 'opponent_ppr',
+                                'opponent_pts_total': 'opponent_points',
+                                'four_bagger_pct': 'four_bagger_pct',
+                                'bags_in_pct': 'bags_in_pct',
+                                'bags_on_pct': 'bags_on_pct',
+                                'bags_off_pct': 'bags_off_pct',
+                            };
+                            const mappedField = fieldMap[config.field] || config.field;
+                            value = mappedField ? player[mappedField] : null;
+                        } else {
+                            value = player[config.field];
+                        }
+                    } else {
+                        value = player;
+                    }
+                    
+                    return `<td>${config.formatter(value)}</td>`;
+                }).join('')}</tr>`;
+            }).join('');
+            
+            document.getElementById('statsControls').style.display = 'block';
+        }
+
+        async function loadGameStats() {
+            // No longer needed - stats are loaded directly from /api/events/{event_id}
+            // which now returns cached stats
+            return;
+        }
+
+        function changeStatsSource() {
+            // Stats source selector removed - always use cached stats
+            // This function is kept for compatibility but does nothing
+            currentStatsSource = 'games';
+            renderStatsTable();
+        }
+
+        function sortTable(field) {
+            if (currentSortBy === field) {
+                currentSortOrder = currentSortOrder === 'asc' ? 'desc' : 'asc';
+            } else {
+                currentSortBy = field;
+                // Default to desc for stats that are better when higher
+                currentSortOrder = descDefaultFields.includes(field) ? 'desc' : 'asc';
+            }
+            renderStatsTable();
+        }
+    </script>
+</body>
+</html>
+
