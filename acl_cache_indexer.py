@@ -629,61 +629,66 @@ async def index_all_events_for_season(bucket_id: int, db: AsyncSession = None) -
         
         event_ids = set()
         
-        # If we have cached player events lists, use those
+        # First, try to collect event IDs from cached player events lists
         if cached_events_lists:
             for cache_entry in cached_events_lists:
                 events_data = cache_entry.response_json.get("data", [])
-                for event in events_data:
-                    event_id = event.get("eventID") or event.get("event_id") or event.get("eventId")
-                    if event_id:
-                        event_ids.add(int(event_id))
-        else:
-            # No cached player events lists - get player IDs from standings and fetch their events
-            standings_result = await db.execute(
-                select(ACLAPICache).where(
-                    and_(
-                        ACLAPICache.endpoint_type == "standings",
-                        ACLAPICache.bucket_id == bucket_id,
-                        ACLAPICache.region == "us"
-                    )
+                if events_data:
+                    for event in events_data:
+                        event_id = event.get("eventID") or event.get("event_id") or event.get("eventId")
+                        if event_id:
+                            event_ids.add(int(event_id))
+        
+        # Always also check standings and fetch player events lists if needed
+        # This ensures we get all events even if some players weren't cached yet
+        standings_result = await db.execute(
+            select(ACLAPICache).where(
+                and_(
+                    ACLAPICache.endpoint_type == "standings",
+                    ACLAPICache.bucket_id == bucket_id,
+                    ACLAPICache.region == "us"
                 )
             )
-            standings_entry = standings_result.scalar_one_or_none()
+        )
+        standings_entry = standings_result.scalar_one_or_none()
+        
+        if standings_entry:
+            standings_data = standings_entry.response_json
+            player_list = standings_data.get("playerACLStandingsList", [])
+            total_players = len(player_list)
+            cache_indexing_status[status_key]["total_players"] = total_players
             
-            if standings_entry:
-                standings_data = standings_entry.response_json
-                player_list = standings_data.get("playerACLStandingsList", [])
+            # Fetch player events lists for each player (and cache them)
+            for i, player in enumerate(player_list):
+                player_id = player.get("playerID")
+                if not player_id:
+                    continue
                 
-                # Fetch player events lists for each player (and cache them)
-                for i, player in enumerate(player_list):
-                    player_id = player.get("playerID")
-                    if not player_id:
-                        continue
+                try:
+                    # Fetch and cache player events list (will use cache if available)
+                    events_list = await index_player_events_list(player_id, bucket_id, use_cache=True, db=db)
+                    if events_list:
+                        for event in events_list:
+                            event_id = event.get("eventID") or event.get("event_id") or event.get("eventId")
+                            if event_id:
+                                event_ids.add(int(event_id))
                     
-                    try:
-                        # Fetch and cache player events list
-                        events_list = await index_player_events_list(player_id, bucket_id, use_cache=True, db=db)
-                        if events_list:
-                            for event in events_list:
-                                event_id = event.get("eventID") or event.get("event_id") or event.get("eventId")
-                                if event_id:
-                                    event_ids.add(int(event_id))
-                        
-                        cache_indexing_status[status_key]["players_processed"] = i + 1
-                        
-                        # Commit every 50 players
-                        if (i + 1) % 50 == 0:
-                            await db.commit()
-                            await asyncio.sleep(0.1)
-                    except Exception as e:
-                        print(f"Error fetching events for player {player_id}: {e}")
-                        continue
-                
-                await db.commit()
-            else:
-                # No standings cached either - can't discover events
+                    cache_indexing_status[status_key]["players_processed"] = i + 1
+                    
+                    # Commit every 50 players
+                    if (i + 1) % 50 == 0:
+                        await db.commit()
+                        await asyncio.sleep(0.1)
+                except Exception as e:
+                    print(f"Error fetching events for player {player_id}: {e}")
+                    continue
+            
+            await db.commit()
+        else:
+            # No standings cached - can't discover events
+            if not event_ids:
                 cache_indexing_status[status_key]["status"] = "error"
-                cache_indexing_status[status_key]["error"] = "No cached standings or player events lists found. Index standings first."
+                cache_indexing_status[status_key]["error"] = "No cached standings found. Index standings first."
                 return cache_indexing_status[status_key]
         
         event_list = list(event_ids)
