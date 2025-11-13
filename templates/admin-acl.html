@@ -317,14 +317,23 @@
 
         async function refreshStatus(type) {
             const container = document.getElementById(`${type}Container`);
-            container.innerHTML = '';
             
             for (const season of SEASONS) {
                 try {
                     const response = await fetch(`${API_BASE}/status-${type}/${season.id}`);
                     const status = await response.json();
-                    const card = createStatusCard(season.id, type, status);
-                    container.appendChild(card);
+                    const cardId = `${type}_${season.id}`;
+                    let existingCard = document.getElementById(cardId);
+                    
+                    if (existingCard) {
+                        // Update existing card in place
+                        const newCard = createStatusCard(season.id, type, status);
+                        existingCard.replaceWith(newCard);
+                    } else {
+                        // Create new card if it doesn't exist
+                        const card = createStatusCard(season.id, type, status);
+                        container.appendChild(card);
+                    }
                 } catch (error) {
                     console.error(`Error fetching ${type} status for season ${season.id}:`, error);
                 }
@@ -338,12 +347,19 @@
             refreshStatus('events');
             refreshStatus('games');
             
-            // Auto-refresh every 5 seconds
+            // Auto-refresh every 5 seconds, but only if there are active operations
             setInterval(() => {
-                refreshStatus('standings');
-                refreshStatus('players');
-                refreshStatus('events');
-                refreshStatus('games');
+                // Check if any operations are running before refreshing
+                const hasActiveOps = Array.from(document.querySelectorAll('.status-badge')).some(
+                    badge => badge.textContent === 'RUNNING'
+                );
+                
+                if (hasActiveOps) {
+                    refreshStatus('standings');
+                    refreshStatus('players');
+                    refreshStatus('events');
+                    refreshStatus('games');
+                }
             }, 5000);
         });
     </script>
