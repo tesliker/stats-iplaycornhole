@@ -264,6 +264,7 @@ async def index_event_info(event_id: int, use_cache: bool = True, db: AsyncSessi
     # Fetch from API
     async with httpx.AsyncClient(timeout=30.0) as client:
         try:
+            print(f"Fetching from ACL API: {url}")
             response = await client.get(url)
             if response.status_code == 404:
                 return None
