@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - ACL API Cache Indexer</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <style>
+        .admin-container {
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+        }
+        .admin-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+        .status-card {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .status-badge {
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+        .status-running { background: #4CAF50; color: white; }
+        .status-completed { background: #2196F3; color: white; }
+        .status-error { background: #f44336; color: white; }
+        .status-not_running { background: #9e9e9e; color: white; }
+        .progress-bar {
+            width: 100%;
+            height: 30px;
+            background: #f0f0f0;
+            border-radius: 15px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4CAF50, #8BC34A);
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+        .btn-control {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin: 5px;
+        }
+        .btn-start { background: #4CAF50; color: white; }
+        .btn-control:hover { transform: translateY(-2px); opacity: 0.9; }
+        .btn-control:disabled { opacity: 0.5; cursor: not-allowed; }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        .stat-item {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 6px;
+        }
+        .stat-label {
+            font-size: 0.85rem;
+            color: #666;
+            margin-bottom: 5px;
+        }
+        .stat-value {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #333;
+        }
+        .section-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin: 30px 0 15px 0;
+            color: #333;
+        }
+        .info-text {
+            color: #666;
+            font-size: 0.9rem;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="admin-container">
+        <div class="admin-header">
+            <h1>ACL API Cache Indexer</h1>
+            <p>Index all raw JSON responses from ACL API. Never hit their servers again!</p>
+        </div>
+
+        <div class="section-title">Standings</div>
+        <div id="standingsContainer"></div>
+
+        <div class="section-title">Player Data</div>
+        <div id="playersContainer"></div>
+
+        <div class="section-title">Events</div>
+        <div id="eventsContainer"></div>
+
+        <div class="section-title">Games</div>
+        <div id="gamesContainer"></div>
+    </div>
+
+    <script>
+        const API_BASE = '/api/acl-cache';
+
+        const SEASONS = [
+            { id: 11, name: '2025-2026' },
+            { id: 10, name: '2024-2025' },
+            { id: 9, name: '2023-2024' },
+            { id: 8, name: '2022-2023' },
+            { id: 7, name: '2021-2022' },
+            { id: 6, name: '2020-2021' },
+            { id: 5, name: '2019-2020' },
+            { id: 4, name: '2018-2019' },
+            { id: 3, name: '2017-2018' },
+            { id: 2, name: '2016-2017' },
+            { id: 1, name: '2015-2016' },
+            { id: 0, name: '2014-2015' }
+        ];
+
+        function getSeasonName(bucketId) {
+            const season = SEASONS.find(s => s.id === bucketId);
+            return season ? season.name : '';
+        }
+
+        function createStatusCard(bucketId, type, status) {
+            const card = document.createElement('div');
+            card.className = 'status-card';
+            card.id = `${type}_${bucketId}`;
+            
+            const statusClass = `status-${status.status || 'not_running'}`;
+            const statusLabel = (status.status || 'not_running').toUpperCase();
+            
+            let total = 0;
+            let processed = 0;
+            let percent = 0;
+            let statsHtml = '';
+            
+            if (type === 'standings') {
+                total = 2; // US and Canada
+                processed = (status.us_status === 'completed' ? 1 : 0) + (status.canada_status === 'completed' ? 1 : 0);
+                percent = total > 0 ? Math.round((processed / total) * 100) : 0;
+                statsHtml = `
+                    <div class="stat-item">
+                        <div class="stat-label">US Status</div>
+                        <div class="stat-value">${status.us_status || 'pending'}</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Canada Status</div>
+                        <div class="stat-value">${status.canada_status || 'pending'}</div>
+                    </div>
+                `;
+            } else if (type === 'players') {
+                total = status.total_players || 0;
+                processed = status.processed_players || 0;
+                percent = total > 0 ? Math.round((processed / total) * 100) : 0;
+                statsHtml = `
+                    <div class="stat-item">
+                        <div class="stat-label">Total Players</div>
+                        <div class="stat-value">${total.toLocaleString()}</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Processed</div>
+                        <div class="stat-value">${processed.toLocaleString()}</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Stats Indexed</div>
+                        <div class="stat-value">${(status.stats_indexed || 0).toLocaleString()}</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Events Lists Indexed</div>
+                        <div class="stat-value">${(status.events_indexed || 0).toLocaleString()}</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Errors</div>
+                        <div class="stat-value">${status.errors || 0}</div>
+                    </div>
+                `;
+            } else if (type === 'events') {
+                total = status.total_events || 0;
+                processed = status.processed_events || 0;
+                percent = total > 0 ? Math.round((processed / total) * 100) : 0;
+                statsHtml = `
+                    <div class="stat-item">
+                        <div class="stat-label">Total Events</div>
+                        <div class="stat-value">${total.toLocaleString()}</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Processed</div>
+                        <div class="stat-value">${processed.toLocaleString()}</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Event Info</div>
+                        <div class="stat-value">${(status.event_info_indexed || 0).toLocaleString()}</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Player Stats</div>
+                        <div class="stat-value">${(status.event_player_stats_indexed || 0).toLocaleString()}</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Standings</div>
+                        <div class="stat-value">${(status.event_standings_indexed || 0).toLocaleString()}</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Bracket Data</div>
+                        <div class="stat-value">${(status.bracket_data_indexed || 0).toLocaleString()}</div>
+                    </div>
+                `;
+            } else if (type === 'games') {
+                total = status.total_matches || 0;
+                processed = status.processed_matches || 0;
+                percent = total > 0 ? Math.round((processed / total) * 100) : 0;
+                statsHtml = `
+                    <div class="stat-item">
+                        <div class="stat-label">Total Matches</div>
+                        <div class="stat-value">${total.toLocaleString()}</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Processed Matches</div>
+                        <div class="stat-value">${processed.toLocaleString()}</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Total Games</div>
+                        <div class="stat-value">${(status.total_games || 0).toLocaleString()}</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Processed Games</div>
+                        <div class="stat-value">${(status.processed_games || 0).toLocaleString()}</div>
+                    </div>
+                `;
+            }
+            
+            card.innerHTML = `
+                <div class="status-header">
+                    <h3>Season ${bucketId} ${getSeasonName(bucketId)}</h3>
+                    <span class="status-badge ${statusClass}">${statusLabel}</span>
+                </div>
+                
+                ${status.status === 'running' ? `
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: ${percent}%">
+                        ${percent}%
+                    </div>
+                </div>
+                ` : ''}
+                
+                <div class="stats-grid">
+                    ${statsHtml}
+                </div>
+                
+                <div style="margin-top: 15px;">
+                    <button class="btn-control btn-start" onclick="startIndexing(${bucketId}, '${type}')" 
+                            ${status.status === 'running' ? 'disabled' : ''}>
+                        Start Indexing
+                    </button>
+                </div>
+            `;
+            
+            return card;
+        }
+
+        async function startIndexing(bucketId, type) {
+            if (!confirm(`Start indexing ${type} for Season ${bucketId}?`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/index-${type}/${bucketId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Basic ' + btoa('tesliker:outkast')
+                    }
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+                    throw new Error(errorData.detail || `HTTP ${response.status}`);
+                }
+                
+                const data = await response.json();
+                alert(`Indexing started: ${data.message}`);
+                setTimeout(() => {
+                    refreshStatus(type);
+                }, 1000);
+            } catch (error) {
+                alert(`Error starting indexing: ${error.message}`);
+                console.error('Error:', error);
+            }
+        }
+
+        async function refreshStatus(type) {
+            const container = document.getElementById(`${type}Container`);
+            container.innerHTML = '';
+            
+            for (const season of SEASONS) {
+                try {
+                    const response = await fetch(`${API_BASE}/status-${type}/${season.id}`);
+                    const status = await response.json();
+                    const card = createStatusCard(season.id, type, status);
+                    container.appendChild(card);
+                } catch (error) {
+                    console.error(`Error fetching ${type} status for season ${season.id}:`, error);
+                }
+            }
+        }
+
+        // Initial load
+        document.addEventListener('DOMContentLoaded', () => {
+            refreshStatus('standings');
+            refreshStatus('players');
+            refreshStatus('events');
+            refreshStatus('games');
+            
+            // Auto-refresh every 5 seconds
+            setInterval(() => {
+                refreshStatus('standings');
+                refreshStatus('players');
+                refreshStatus('events');
+                refreshStatus('games');
+            }, 5000);
+        });
+    </script>
+</body>
+</html>
+
