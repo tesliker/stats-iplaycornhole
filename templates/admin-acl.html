@@ -164,17 +164,13 @@
             let statsHtml = '';
             
             if (type === 'standings') {
-                total = 2; // US and Canada
-                processed = (status.us_status === 'completed' ? 1 : 0) + (status.canada_status === 'completed' ? 1 : 0);
+                total = 1; // US only
+                processed = (status.us_status === 'completed' ? 1 : 0);
                 percent = total > 0 ? Math.round((processed / total) * 100) : 0;
                 statsHtml = `
                     <div class="stat-item">
                         <div class="stat-label">US Status</div>
                         <div class="stat-value">${status.us_status || 'pending'}</div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="stat-label">Canada Status</div>
-                        <div class="stat-value">${status.canada_status || 'pending'}</div>
                     </div>
                 `;
             } else if (type === 'players') {

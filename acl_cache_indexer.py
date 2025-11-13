@@ -489,7 +489,7 @@ async def index_match_stats(event_id: int, match_id: int, game_id: int = 1, use_
 # Bulk indexing functions for full season indexing
 
 async def index_all_standings_for_season(bucket_id: int, db: AsyncSession = None) -> Dict:
-    """Index standings for both US and Canada for a season."""
+    """Index standings for US only for a season."""
     if db is None:
         async with async_session_maker() as session:
             return await index_all_standings_for_season(bucket_id, session)
@@ -499,25 +499,14 @@ async def index_all_standings_for_season(bucket_id: int, db: AsyncSession = None
         "status": "running",
         "bucket_id": bucket_id,
         "started_at": datetime.utcnow().isoformat(),
-        "us_status": "pending",
-        "canada_status": "pending"
+        "us_status": "pending"
     }
     
     try:
-        # Index US standings
+        # Index US standings only
         cache_indexing_status[status_key]["us_status"] = "running"
         await index_standings(bucket_id, "us", use_cache=True, db=db)
         cache_indexing_status[status_key]["us_status"] = "completed"
-        
-        # Index Canada standings
-        cache_indexing_status[status_key]["canada_status"] = "running"
-        try:
-            await index_standings(bucket_id, "canada", use_cache=True, db=db)
-            cache_indexing_status[status_key]["canada_status"] = "completed"
-        except Exception as e:
-            # Canada standings might not exist for all seasons
-            cache_indexing_status[status_key]["canada_status"] = "error"
-            cache_indexing_status[status_key]["canada_error"] = str(e)
         
         cache_indexing_status[status_key]["status"] = "completed"
         cache_indexing_status[status_key]["completed_at"] = datetime.utcnow().isoformat()
@@ -550,23 +539,13 @@ async def index_all_player_data_for_season(bucket_id: int, db: AsyncSession = No
     }
     
     try:
-        # Get standings to find all players
+        # Get US standings to find all players
         standings_us = await index_standings(bucket_id, "us", use_cache=True, db=db)
-        standings_ca = None
-        try:
-            standings_ca = await index_standings(bucket_id, "canada", use_cache=True, db=db)
-        except:
-            pass  # Canada might not exist
         
-        # Collect all player IDs
+        # Collect all player IDs from US standings only
         player_ids = set()
         if standings_us and "playerACLStandingsList" in standings_us:
             for player in standings_us["playerACLStandingsList"]:
-                player_id = player.get("playerID")
-                if player_id:
-                    player_ids.add(player_id)
-        if standings_ca and "playerACLStandingsList" in standings_ca:
-            for player in standings_ca["playerACLStandingsList"]:
                 player_id = player.get("playerID")
                 if player_id:
                     player_ids.add(player_id)
